@@ -8,6 +8,7 @@ interface GravityDebugPanelProps {
   config: GravityConfig
   onConfigChange: (config: GravityConfig) => void
   starCount: number
+  onClearStars?: () => void
   debugStats?: {
     holdDragSpeed: number
     releaseFlickSpeed: number
@@ -16,9 +17,16 @@ interface GravityDebugPanelProps {
     estimatedVCirc: number
     estimatedVEsc: number
   } | null
+  energyStats?: {
+    kinetic: number
+    potential: number
+    total: number
+    history: number[]
+    trend: 'stable' | 'decreasing' | 'increasing'
+  } | null
 }
 
-export default function GravityDebugPanel({ config, onConfigChange, starCount, debugStats }: GravityDebugPanelProps) {
+export default function GravityDebugPanel({ config, onConfigChange, starCount, onClearStars, debugStats, energyStats }: GravityDebugPanelProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [localConfig, setLocalConfig] = useState<GravityConfig>({ ...config })
 
@@ -46,6 +54,44 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, d
           <div className={styles.info}>
             <strong>Stars:</strong> {starCount} / {config.maxStars}
           </div>
+
+          {/* Energy Debug Overlay */}
+          {energyStats && (
+            <div className={styles.debugStats} style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', padding: '8px', borderRadius: '4px', marginBottom: '12px' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#ffff00' }}>Energy Debug</div>
+              <div className={styles.debugStatsContent}>
+                <div className={styles.debugStatRow}>
+                  <span className={styles.debugStatLabel}>Kinetic (K):</span>
+                  <span className={styles.debugStatValue}>{energyStats.kinetic.toFixed(2)}</span>
+                </div>
+                <div className={styles.debugStatRow}>
+                  <span className={styles.debugStatLabel}>Potential (U):</span>
+                  <span className={styles.debugStatValue}>{energyStats.potential.toFixed(2)}</span>
+                </div>
+                <div className={styles.debugStatRow}>
+                  <span className={styles.debugStatLabel}>Total (E=K+U):</span>
+                  <span className={styles.debugStatValue} style={{ 
+                    color: energyStats.trend === 'decreasing' ? '#ff0000' : 
+                           energyStats.trend === 'increasing' ? '#00ff00' : '#ffffff'
+                  }}>
+                    {energyStats.total.toFixed(2)}
+                  </span>
+                </div>
+                {energyStats.history.length > 10 && (
+                  <div className={styles.debugStatRow} style={{ fontSize: '0.85em', marginTop: '4px' }}>
+                    <span className={styles.debugStatLabel}>Trend:</span>
+                    <span className={styles.debugStatValue} style={{
+                      color: energyStats.trend === 'decreasing' ? '#ff0000' : 
+                             energyStats.trend === 'increasing' ? '#00ff00' : '#ffff00'
+                    }}>
+                      {energyStats.trend === 'decreasing' ? '↓ DECREASING' : 
+                       energyStats.trend === 'increasing' ? '↑ INCREASING' : '→ STABLE'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Debug Stats Overlay - Always reserve space to prevent layout shift */}
           <div className={styles.debugStatsContainer}>
@@ -83,6 +129,31 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, d
                   )}
                 </div>
               </div>
+            )}
+          </div>
+
+          <div className={styles.section}>
+            <h3>Controls</h3>
+            {onClearStars && (
+              <button
+                onClick={onClearStars}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  marginBottom: '12px',
+                  backgroundColor: '#ff4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#ff6666'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ff4444'}
+              >
+                Clear All Stars ({starCount})
+              </button>
             )}
           </div>
 

@@ -33,6 +33,7 @@ export class GravityInteraction {
       const y = e.clientY - rect.top
       this.cursorX = x
       this.cursorY = y
+      
 
       if (this.isPointerDown) {
         // Update creation position

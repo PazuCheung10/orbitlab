@@ -140,6 +140,13 @@ export default function MotionCanvasPage() {
         config={config}
         onConfigChange={handleConfigChange}
         starCount={starCount}
+        onClearStars={() => {
+          if (systemRef.current) {
+            systemRef.current.clearAllStars()
+            setStarCount(0)
+            setDebugStats(null)
+          }
+        }}
         debugStats={debugStats}
       />
     </div>

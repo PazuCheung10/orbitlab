@@ -44,6 +44,10 @@ export class GravitySystem {
     this.simulation.loadUniverse(universe)
   }
 
+  clearAllStars(): void {
+    this.simulation.clearAllStars()
+  }
+
   getConfig(): GravityConfig {
     return { ...this.config }
   }

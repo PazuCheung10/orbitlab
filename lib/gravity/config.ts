@@ -115,6 +115,7 @@ export interface GravityConfig {
   enableMerging: boolean
   enableOrbitTrails: boolean
   orbitTrailFadeTime: number
+  enableBoundaryWrapping: boolean // Periodic boundary conditions (torus)
   
   // DEPRECATED (kept for compatibility)
   maxStarSize: number
@@ -191,6 +192,7 @@ export const GRAVITY_CONFIG: GravityConfig = {
   enableMerging: true,
   enableOrbitTrails: false,
   orbitTrailFadeTime: 1.0,
+  enableBoundaryWrapping: true, // Default to true for torus physics
   
   // DEPRECATED (kept for compatibility)
   maxStarSize: MAX_STAR_SIZE,

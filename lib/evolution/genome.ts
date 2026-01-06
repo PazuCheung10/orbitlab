@@ -137,9 +137,10 @@ export class GenomeDecoder {
       maxStars: 60,
       
       // Optional features
-      enableMerging: true,
-      enableOrbitTrails: false,
-      orbitTrailFadeTime: 1.0,
+    enableMerging: true,
+    enableOrbitTrails: false,
+    orbitTrailFadeTime: 1.0,
+    enableBoundaryWrapping: true,
       
       // DEPRECATED (for compatibility)
       maxStarSize: 12,

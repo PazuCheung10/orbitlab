@@ -59,19 +59,23 @@ export class Star {
     this.y += this.vyHalf * deltaTime
     
     // Apply minimal damping only if configured (default is 0)
-    if (config.velocityDamping > 0) {
+    // DISABLED in ORBIT_PLAYGROUND mode to preserve energy
+    if (config.velocityDamping > 0 && config.physicsMode !== 'ORBIT_PLAYGROUND') {
       this.vxHalf *= (1 - config.velocityDamping)
       this.vyHalf *= (1 - config.velocityDamping)
     }
     
-    // Limit max speed to 1000 px/s (natural speed, not release speed)
-    // NOTE: This can cause energy loss if stars hit the limit during close encounters
-    // Consider increasing limit or removing for stable orbits
-    const currentSpeed = Math.sqrt(this.vxHalf * this.vxHalf + this.vyHalf * this.vyHalf)
-    if (currentSpeed > 1000) {
-      const scale = 1000 / currentSpeed
-      this.vxHalf *= scale
-      this.vyHalf *= scale
+    // Speed clamping: DISABLED in ORBIT_PLAYGROUND mode to preserve energy
+    // Only enabled in CHAOS mode as a safety measure
+    if (config.physicsMode !== 'ORBIT_PLAYGROUND') {
+      // Limit max speed to 1000 px/s (natural speed, not release speed)
+      // NOTE: This can cause energy loss if stars hit the limit during close encounters
+      const currentSpeed = Math.sqrt(this.vxHalf * this.vxHalf + this.vyHalf * this.vyHalf)
+      if (currentSpeed > 1000) {
+        const scale = 1000 / currentSpeed
+        this.vxHalf *= scale
+        this.vyHalf *= scale
+      }
     }
     
     // Periodic boundary conditions
@@ -111,17 +115,21 @@ export class Star {
   }
 
   // Complete the leapfrog step with second kick
-  completeLeapfrog(deltaTime: number, ax: number, ay: number): void {
+  completeLeapfrog(deltaTime: number, ax: number, ay: number, config?: GravityConfig): void {
     // KICK 2: v = v_half + a_new * (dt/2)
     this.vxHalf += ax * (deltaTime / 2)
     this.vyHalf += ay * (deltaTime / 2)
     
-    // Limit max speed to 1000 px/s (natural speed, not release speed)
-    const finalSpeed = Math.sqrt(this.vxHalf * this.vxHalf + this.vyHalf * this.vyHalf)
-    if (finalSpeed > 1000) {
-      const scale = 1000 / finalSpeed
-      this.vxHalf *= scale
-      this.vyHalf *= scale
+    // Speed clamping: DISABLED in ORBIT_PLAYGROUND mode to preserve energy
+    // Only enabled in CHAOS mode as a safety measure
+    if (config && config.physicsMode !== 'ORBIT_PLAYGROUND') {
+      // Limit max speed to 1000 px/s (natural speed, not release speed)
+      const finalSpeed = Math.sqrt(this.vxHalf * this.vxHalf + this.vyHalf * this.vyHalf)
+      if (finalSpeed > 1000) {
+        const scale = 1000 / finalSpeed
+        this.vxHalf *= scale
+        this.vyHalf *= scale
+      }
     }
     
     // Sync full velocity
@@ -129,15 +137,33 @@ export class Star {
     this.vy = this.vyHalf
   }
 
-  distanceTo(other: Star): number {
-    const dx = this.x - other.x
-    const dy = this.y - other.y
+  distanceTo(other: Star, width?: number, height?: number, enableWrapping?: boolean): number {
+    let dx = this.x - other.x
+    let dy = this.y - other.y
+    
+    // Use minimum-image convention if wrapping is enabled
+    if (enableWrapping && width !== undefined && height !== undefined) {
+      if (dx > width / 2) dx -= width
+      else if (dx < -width / 2) dx += width
+      if (dy > height / 2) dy -= height
+      else if (dy < -height / 2) dy += height
+    }
+    
     return Math.sqrt(dx * dx + dy * dy)
   }
 
-  distanceToPoint(x: number, y: number): number {
-    const dx = this.x - x
-    const dy = this.y - y
+  distanceToPoint(x: number, y: number, width?: number, height?: number, enableWrapping?: boolean): number {
+    let dx = this.x - x
+    let dy = this.y - y
+    
+    // Use minimum-image convention if wrapping is enabled
+    if (enableWrapping && width !== undefined && height !== undefined) {
+      if (dx > width / 2) dx -= width
+      else if (dx < -width / 2) dx += width
+      if (dy > height / 2) dy -= height
+      else if (dy < -height / 2) dy += height
+    }
+    
     return Math.sqrt(dx * dx + dy * dy)
   }
 

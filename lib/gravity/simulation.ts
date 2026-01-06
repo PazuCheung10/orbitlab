@@ -33,19 +33,46 @@ function add(v1: Vector2, v2: Vector2): Vector2 {
   return { x: v1.x + v2.x, y: v1.y + v2.y }
 }
 
+/**
+ * Minimum image convention for periodic boundary conditions (torus wrapping)
+ * Returns the shortest distance across periodic boundaries
+ * 
+ * @param d - Distance component (dx or dy)
+ * @param size - Boundary size (width or height)
+ * @returns Shortest distance across boundaries
+ */
+function minImageDelta(d: number, size: number): number {
+  if (d > size / 2) {
+    d -= size
+  } else if (d < -size / 2) {
+    d += size
+  }
+  return d
+}
+
 // Find orbital center (nearest massive star or center of mass)
+// Uses minimum-image convention for periodic boundaries
 function findOrbitalCenter(
   position: Vector2,
   stars: Star[],
-  searchRadius: number
+  searchRadius: number,
+  width: number,
+  height: number,
+  enableWrapping: boolean
 ): { center: Vector2; totalMass: number } | null {
   let nearestStar: Star | null = null
   let nearestDistance = Infinity
   
-  // Find nearest massive star
+  // Find nearest massive star using minimum-image convention
   for (const star of stars) {
-    const dx = star.x - position.x
-    const dy = star.y - position.y
+    let dx = star.x - position.x
+    let dy = star.y - position.y
+    
+    if (enableWrapping) {
+      dx = minImageDelta(dx, width)
+      dy = minImageDelta(dy, height)
+    }
+    
     const distance = Math.sqrt(dx * dx + dy * dy)
     
     if (distance < searchRadius && distance < nearestDistance) {
@@ -57,26 +84,43 @@ function findOrbitalCenter(
   if (!nearestStar) return null
   
   // Check if there are other stars nearby to compute center of mass
-  const nearbyStars: Star[] = [nearestStar]
+  const nearbyStars: Array<{ star: Star; dx: number; dy: number }> = []
   for (const star of stars) {
-    if (star === nearestStar) continue
-    const dx = star.x - position.x
-    const dy = star.y - position.y
+    if (star === nearestStar) {
+      let dx = star.x - position.x
+      let dy = star.y - position.y
+      if (enableWrapping) {
+        dx = minImageDelta(dx, width)
+        dy = minImageDelta(dy, height)
+      }
+      nearbyStars.push({ star, dx, dy })
+      continue
+    }
+    
+    let dx = star.x - position.x
+    let dy = star.y - position.y
+    if (enableWrapping) {
+      dx = minImageDelta(dx, width)
+      dy = minImageDelta(dy, height)
+    }
     const distance = Math.sqrt(dx * dx + dy * dy)
     if (distance < searchRadius) {
-      nearbyStars.push(star)
+      nearbyStars.push({ star, dx, dy })
     }
   }
   
-  // Compute center of mass
+  // Compute center of mass using minimum-image positions
   let totalMass = 0
   let weightedX = 0
   let weightedY = 0
   
-  for (const star of nearbyStars) {
+  for (const { star, dx, dy } of nearbyStars) {
+    // Position relative to search position using minimum-image
+    const relX = position.x + dx
+    const relY = position.y + dy
     totalMass += star.mass
-    weightedX += star.x * star.mass
-    weightedY += star.y * star.mass
+    weightedX += relX * star.mass
+    weightedY += relY * star.mass
   }
   
   if (totalMass === 0) return null
@@ -112,6 +156,70 @@ function decomposeVelocity(
   const tangential = subtract(velocity, radial)
   
   return { radial, tangential }
+}
+
+/**
+ * Rotate velocity direction toward tangential direction while preserving magnitude
+ * This is Hamiltonian-consistent: preserves energy and angular momentum magnitude
+ * 
+ * @param position - Star position
+ * @param center - Orbital center position
+ * @param velocity - Current velocity vector
+ * @param guidanceStrength - Guidance strength [0, 1], where 0 = no change, 1 = pure tangential
+ * @returns New velocity with same magnitude, rotated direction
+ */
+function rotateVelocityTowardTangential(
+  position: Vector2,
+  center: Vector2,
+  velocity: Vector2,
+  guidanceStrength: number
+): Vector2 {
+  const EPS = 1e-6
+  
+  // Safety: if velocity is too small, skip guidance
+  const speed = length(velocity)
+  if (speed < EPS) {
+    return velocity
+  }
+  
+  // Compute relative position
+  const r = subtract(position, center)
+  const rLen = length(r)
+  
+  // Safety: if position is at center, skip guidance
+  if (rLen < EPS) {
+    return velocity
+  }
+  
+  // Normalize radial direction
+  const rHat = normalize(r)
+  
+  // Compute tangential direction (perpendicular to radial, counter-clockwise)
+  const tHat = { x: -rHat.y, y: rHat.x }
+  
+  // Decompose velocity into radial and tangential components
+  const vRadial = dot(velocity, rHat)
+  const vTangential = dot(velocity, tHat)
+  
+  // Current velocity direction
+  const vHat = normalize(velocity)
+  
+  // Determine tangential direction sign (preserve current tangential component sign)
+  const tangentialSign = vTangential >= 0 ? 1 : -1
+  const tHatSigned = scale(tHat, tangentialSign)
+  
+  // Interpolate between current direction and tangential direction
+  // guidanceStrength = 0: keep current direction
+  // guidanceStrength = 1: pure tangential direction
+  const desiredDir = normalize(
+    add(
+      scale(vHat, 1 - guidanceStrength),
+      scale(tHatSigned, guidanceStrength)
+    )
+  )
+  
+  // Reconstruct velocity with same magnitude, new direction
+  return scale(desiredDir, speed)
 }
 
 // Speed compressor: maps raw speed to compressed output
@@ -152,6 +260,15 @@ export class GravitySimulation {
     finalLaunchSpeed: number
     estimatedVCirc: number
     estimatedVEsc: number
+  } | null = null
+  
+  // Energy diagnostics
+  energyStats: {
+    kinetic: number
+    potential: number
+    total: number
+    history: number[] // Last 100 values for trend analysis
+    trend: 'stable' | 'decreasing' | 'increasing' // Energy trend
   } | null = null
 
   constructor(width: number, height: number, config: GravityConfig) {
@@ -238,9 +355,7 @@ export class GravitySimulation {
     
     // Enforce ORBIT_PLAYGROUND rules
     if (config.physicsMode === PhysicsMode.ORBIT_PLAYGROUND) {
-      // Disable force clamping
-      this.config.maxForceMagnitude = 0
-      // Ensure no velocity damping
+      // Ensure no velocity damping (force clamping removed entirely - breaks energy conservation)
       this.config.velocityDamping = 0
     }
     
@@ -391,68 +506,43 @@ export class GravitySimulation {
     vy *= massResistance
     
     // Apply Angular Momentum Guidance (LAUNCH ASSIST ONLY)
+    // Hamiltonian-consistent: only rotates velocity direction, preserves magnitude
+    // This preserves energy and angular momentum, only shapes initial conditions
     if (this.config.angularGuidanceStrength > 0 && this.stars.length > 0) {
       const position = { x: this.creationX, y: this.creationY }
       const velocity = { x: vx, y: vy }
       
-      // Find orbital center
+      // Find orbital center (using minimum-image convention for consistency)
       const orbitalCenter = findOrbitalCenter(
         position,
         this.stars,
-        this.config.orbitalCenterSearchRadius
+        this.config.orbitalCenterSearchRadius,
+        this.width,
+        this.height,
+        this.config.enableBoundaryWrapping
       )
       
       if (orbitalCenter) {
+        // Rotate velocity toward tangential direction while preserving magnitude
+        // This is a projection onto constant-energy manifold, not a force
+        const guidedVelocity = rotateVelocityTowardTangential(
+          position,
+          orbitalCenter.center,
+          velocity,
+          this.config.angularGuidanceStrength
+        )
+        
+        vx = guidedVelocity.x
+        vy = guidedVelocity.y
+        
+        // Update debug stats (for reference, not used in guidance)
         const r = subtract(position, orbitalCenter.center)
         const rLen = length(r)
-        
-        if (rLen > 0) {
-          // Decompose velocity
-          const { radial, tangential } = decomposeVelocity(position, orbitalCenter.center, velocity)
-          
-          // Only clamp OUTWARD radial velocity (moving away), not INWARD (moving toward)
-          // This prevents repulsion when creating stars close to others
-          const rUnit = normalize(r)
-          const radialMagnitude = dot(velocity, rUnit) // Positive = outward, negative = inward
-          let radialClamped: Vector2
-          
-          if (radialMagnitude > 0) {
-            // Outward: clamp it to reduce escape
-            radialClamped = scale(radial, 1 - this.config.radialClampFactor)
-          } else {
-            // Inward: don't clamp, allow natural attraction
-            radialClamped = radial
-          }
-          
-          // Calculate desired tangential speed for circular orbit
+        if (rLen > 0 && this.debugStats) {
           const vCirc = Math.sqrt((this.config.gravityConstant * orbitalCenter.totalMass) / rLen)
           const vEsc = Math.sqrt(2 * (this.config.gravityConstant * orbitalCenter.totalMass) / rLen)
-          
-          // Gently bias tangential toward v_circ
-          const currentTangentialSpeed = length(tangential)
-          const guidanceFactor = this.config.angularGuidanceStrength
-          const targetTangentialSpeed = currentTangentialSpeed + (vCirc - currentTangentialSpeed) * guidanceFactor
-          
-          // Preserve tangential direction
-          let tangentialUnit = normalize(tangential)
-          if (length(tangentialUnit) === 0) {
-            const rUnit = normalize(r)
-            tangentialUnit = { x: -rUnit.y, y: rUnit.x } // Perpendicular
-          }
-          
-          const tangentialGuided = scale(tangentialUnit, targetTangentialSpeed)
-          
-          // Combine: clamped radial + guided tangential
-          const finalVelocity = add(radialClamped, tangentialGuided)
-          
-          vx = finalVelocity.x
-          vy = finalVelocity.y
-          
-          // Update debug stats
-          if (this.debugStats) {
-            this.debugStats.estimatedVCirc = vCirc
-            this.debugStats.estimatedVEsc = vEsc
-          }
+          this.debugStats.estimatedVCirc = vCirc
+          this.debugStats.estimatedVEsc = vEsc
         }
       }
     }
@@ -510,6 +600,19 @@ export class GravitySimulation {
     this.debugStats = null
   }
 
+  /**
+   * Clear all stars from the simulation
+   */
+  clearAllStars(): void {
+    this.stars = []
+    this.centralSun = null
+    this.isCreating = false
+    this.cursorHistory = []
+    this.debugStats = null
+    this.ripples = []
+    this.energyStats = null
+  }
+
   update(deltaTime: number): void {
     // Clamp deltaTime for numerical stability (dt ≤ 0.01s for ORBIT_PLAYGROUND)
     const maxDt = this.config.physicsMode === PhysicsMode.ORBIT_PLAYGROUND ? 0.01 : 0.1
@@ -538,55 +641,51 @@ export class GravitySimulation {
           if (i === j) continue
           const starB = this.stars[j]
           
-          const dx = starB.x - starA.x
-          const dy = starB.y - starA.y
+          // Use minimum-image convention for periodic boundaries (torus wrapping)
+          const dx = minImageDelta(starB.x - starA.x, this.width)
+          const dy = minImageDelta(starB.y - starA.y, this.height)
           const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
-          const invR = 1 / Math.sqrt(r2)
+          const r = Math.sqrt(r2)
+          const invR = 1 / r
           const invR3 = invR * invR * invR
+          // Pure Plummer-softened gravity: F = G*m1*m2 * (dx,dy) / (r^2 + eps^2)^(3/2)
+          // This is the gradient of U = -G*m1*m2 / sqrt(r^2 + eps^2)
+          // Force is conservative and Hamiltonian-consistent
           const forceMagnitude = this.config.gravityConstant * starA.mass * starB.mass * invR3
           const fx = dx * forceMagnitude
           const fy = dy * forceMagnitude
           
-          // NO force clamping in ORBIT_PLAYGROUND - allow natural orbital forces
+          // Apply acceleration (no force modification - pure potential gradient)
           ax += fx / starA.mass
           ay += fy / starA.mass
         }
       } else {
-        // N_BODY_CHAOS: Full pairwise gravity
+        // N_BODY_CHAOS: Full pairwise gravity with minimum-image convention
         for (let j = 0; j < this.stars.length; j++) {
           if (i === j) continue
           
           const starB = this.stars[j]
           
-          // Calculate distance vector (ALWAYS use direct distance for force calculation)
-          const dx = starB.x - starA.x
-          const dy = starB.y - starA.y
+          // Use minimum-image convention for periodic boundaries (torus wrapping)
+          const dx = minImageDelta(starB.x - starA.x, this.width)
+          const dy = minImageDelta(starB.y - starA.y, this.height)
           
           // Plummer softening: r² = dx² + dy² + eps²
           const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
           const invR = 1 / Math.sqrt(r2)
           const invR3 = invR * invR * invR
           
-          // Force: F = G * m1 * m2 * invR³ * (dx, dy)
+          // Pure Plummer-softened gravity: F = G*m1*m2 * (dx,dy) / (r^2 + eps^2)^(3/2)
+          // This is the gradient of U = -G*m1*m2 / sqrt(r^2 + eps^2)
+          // Force is conservative and Hamiltonian-consistent
+          // NOTE: Force clamping removed - it breaks energy conservation by making force non-conservative
           const forceMagnitude = this.config.gravityConstant * starA.mass * starB.mass * invR3
           const fx = dx * forceMagnitude
           const fy = dy * forceMagnitude
           
-          // Clamp force magnitude (scale relative to base force at softening distance)
-          const forceLen = Math.sqrt(fx * fx + fy * fy)
-          const baseForceScale = (this.config.gravityConstant * starA.mass * starB.mass) / (this.config.softeningEpsPx * this.config.softeningEpsPx)
-          const maxForce = this.config.maxForceMagnitude > 0 
-            ? Math.max(this.config.maxForceMagnitude, baseForceScale * 0.1) 
-            : baseForceScale * 10
-          
-          if (maxForce > 0 && forceLen > maxForce) {
-            const scale = maxForce / forceLen
-            ax += (fx / starA.mass) * scale
-            ay += (fy / starA.mass) * scale
-          } else {
-            ax += fx / starA.mass
-            ay += fy / starA.mass
-          }
+          // Apply acceleration (no force modification - pure potential gradient)
+          ax += fx / starA.mass
+          ay += fy / starA.mass
         }
       }
       
@@ -603,66 +702,62 @@ export class GravitySimulation {
       let ay = 0
       
       if (this.config.physicsMode === PhysicsMode.ORBIT_PLAYGROUND) {
-        // ORBIT_PLAYGROUND: Full pairwise gravity (no central sun)
+        // ORBIT_PLAYGROUND: Full pairwise gravity with minimum-image convention
         // All stars attract each other
         for (let j = 0; j < this.stars.length; j++) {
           if (i === j) continue
           const starB = this.stars[j]
           
-          const dx = starB.x - starA.x
-          const dy = starB.y - starA.y
+          // Use minimum-image convention for periodic boundaries (torus wrapping)
+          const dx = minImageDelta(starB.x - starA.x, this.width)
+          const dy = minImageDelta(starB.y - starA.y, this.height)
           const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
-          const invR = 1 / Math.sqrt(r2)
+          const r = Math.sqrt(r2)
+          const invR = 1 / r
           const invR3 = invR * invR * invR
+          // Pure Plummer-softened gravity: F = G*m1*m2 * (dx,dy) / (r^2 + eps^2)^(3/2)
+          // This is the gradient of U = -G*m1*m2 / sqrt(r^2 + eps^2)
+          // Force is conservative and Hamiltonian-consistent
           const forceMagnitude = this.config.gravityConstant * starA.mass * starB.mass * invR3
           const fx = dx * forceMagnitude
           const fy = dy * forceMagnitude
           
-          // NO force clamping in ORBIT_PLAYGROUND - allow natural orbital forces
+          // Apply acceleration (no force modification - pure potential gradient)
           ax += fx / starA.mass
           ay += fy / starA.mass
         }
       } else {
-        // N_BODY_CHAOS: Full pairwise gravity
+        // N_BODY_CHAOS: Full pairwise gravity with minimum-image convention
         for (let j = 0; j < this.stars.length; j++) {
           if (i === j) continue
           
           const starB = this.stars[j]
           
-          // Calculate distance vector (ALWAYS use direct distance for force calculation)
-          const dx = starB.x - starA.x
-          const dy = starB.y - starA.y
+          // Use minimum-image convention for periodic boundaries (torus wrapping)
+          const dx = minImageDelta(starB.x - starA.x, this.width)
+          const dy = minImageDelta(starB.y - starA.y, this.height)
           
           // Plummer softening: r² = dx² + dy² + eps²
           const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
           const invR = 1 / Math.sqrt(r2)
           const invR3 = invR * invR * invR
           
-          // Force: F = G * m1 * m2 * invR³ * (dx, dy)
+          // Pure Plummer-softened gravity: F = G*m1*m2 * (dx,dy) / (r^2 + eps^2)^(3/2)
+          // This is the gradient of U = -G*m1*m2 / sqrt(r^2 + eps^2)
+          // Force is conservative and Hamiltonian-consistent
+          // NOTE: Force clamping removed - it breaks energy conservation by making force non-conservative
           const forceMagnitude = this.config.gravityConstant * starA.mass * starB.mass * invR3
           const fx = dx * forceMagnitude
           const fy = dy * forceMagnitude
           
-          // Clamp force magnitude (scale relative to base force at softening distance)
-          const forceLen = Math.sqrt(fx * fx + fy * fy)
-          const baseForceScale = (this.config.gravityConstant * starA.mass * starB.mass) / (this.config.softeningEpsPx * this.config.softeningEpsPx)
-          const maxForce = this.config.maxForceMagnitude > 0 
-            ? Math.max(this.config.maxForceMagnitude, baseForceScale * 0.1) 
-            : baseForceScale * 10
-          
-          if (maxForce > 0 && forceLen > maxForce) {
-            const scale = maxForce / forceLen
-            ax += (fx / starA.mass) * scale
-            ay += (fy / starA.mass) * scale
-          } else {
-            ax += fx / starA.mass
-            ay += fy / starA.mass
-          }
+          // Apply acceleration (no force modification - pure potential gradient)
+          ax += fx / starA.mass
+          ay += fy / starA.mass
         }
       }
       
       // Complete leapfrog with second kick
-      starA.completeLeapfrog(dt, ax, ay)
+      starA.completeLeapfrog(dt, ax, ay, this.config)
     }
     
     // Handle merging
@@ -676,7 +771,13 @@ export class GravitySimulation {
         for (let j = i + 1; j < this.stars.length; j++) {
           if (toRemove.has(j)) continue
           
-          const distance = this.stars[i].distanceTo(this.stars[j])
+          // Use minimum-image convention for merge distance (consistent with force calculations)
+          const distance = this.stars[i].distanceTo(
+            this.stars[j],
+            this.width,
+            this.height,
+            this.config.enableBoundaryWrapping
+          )
           // Merge when smaller star is inside larger star: distance < (r2 - r1) / 2 (where r2 > r1)
           // Merge distance is now 1/2 of the previous value
           const r1 = Math.min(this.stars[i].radius, this.stars[j].radius)
@@ -702,6 +803,91 @@ export class GravitySimulation {
       // Add merged stars
       this.stars.push(...toAdd)
     }
+    
+    // Update energy diagnostics (using same dx/dy method as force calculations)
+    this.updateEnergyStats()
+  }
+  
+  /**
+   * Compute total energy (kinetic + potential) for energy conservation validation
+   * Uses the SAME minimum-image convention as force calculations
+   */
+  private updateEnergyStats(): void {
+    if (this.stars.length === 0) {
+      this.energyStats = null
+      return
+    }
+    
+    // Kinetic energy: K = Σ 0.5 * m * v²
+    let kinetic = 0
+    for (const star of this.stars) {
+      const v2 = star.vx * star.vx + star.vy * star.vy
+      kinetic += 0.5 * star.mass * v2
+    }
+    
+    // Potential energy: U = Σ_{i<j} -G * m_i * m_j / r
+    // Using the SAME minimum-image convention as force calculations
+    let potential = 0
+    for (let i = 0; i < this.stars.length; i++) {
+      for (let j = i + 1; j < this.stars.length; j++) {
+        const starA = this.stars[i]
+        const starB = this.stars[j]
+        
+        // Use minimum-image convention (same as force calculations)
+        const dx = minImageDelta(starB.x - starA.x, this.width)
+        const dy = minImageDelta(starB.y - starA.y, this.height)
+        const r = Math.sqrt(dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx)
+        
+        // Potential energy: U = -G * m1 * m2 / r
+        potential -= (this.config.gravityConstant * starA.mass * starB.mass) / r
+      }
+    }
+    
+    const total = kinetic + potential
+    
+    // Initialize or update energy stats
+    if (!this.energyStats) {
+      this.energyStats = {
+        kinetic,
+        potential,
+        total,
+        history: [total],
+        trend: 'stable'
+      }
+    } else {
+      this.energyStats.kinetic = kinetic
+      this.energyStats.potential = potential
+      this.energyStats.total = total
+      this.energyStats.history.push(total)
+      
+      // Keep only last 100 values for trend analysis
+      if (this.energyStats.history.length > 100) {
+        this.energyStats.history.shift()
+      }
+      
+      // Detect energy trend (compare recent vs initial)
+      if (this.energyStats.history.length > 10) {
+        const initial = this.energyStats.history[0]
+        const recent = this.energyStats.history[this.energyStats.history.length - 1]
+        const changePercent = (recent - initial) / Math.abs(initial)
+        
+        // If energy decreased by more than 1%, mark as decreasing
+        if (changePercent < -0.01) {
+          this.energyStats.trend = 'decreasing'
+        } else if (changePercent > 0.01) {
+          this.energyStats.trend = 'increasing'
+        } else {
+          this.energyStats.trend = 'stable'
+        }
+      }
+    }
+  }
+  
+  /**
+   * Get energy statistics for debug overlay
+   */
+  getEnergyStats() {
+    return this.energyStats
   }
 
   getCreationState(): { x: number; y: number; radius: number } | null {
