@@ -59,14 +59,51 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
       const sim = new GravitySimulation(canvasWidth, canvasHeight, config)
       simulationRefs.current[index] = sim
       
+      // Dedicated preview universe - simple, obvious orbits for thumbnails
+      // This is a caricature, not a scaled-down real universe
       sim.loadUniverse({
         width: canvasWidth,
         height: canvasHeight,
-        stars: initialUniverse.stars.map(s => ({
-          x: s.x * (canvasWidth / initialUniverse.width),
-          y: s.y * (canvasHeight / initialUniverse.height),
-          mass: s.mass
-        }))
+        stars: [
+          {
+            x: canvasWidth / 2,
+            y: canvasHeight / 2,
+            mass: 200
+          },
+          {
+            x: canvasWidth / 2 + 30,
+            y: canvasHeight / 2,
+            mass: 5
+          },
+          {
+            x: canvasWidth / 2,
+            y: canvasHeight / 2 + 45,
+            mass: 8
+          },
+          {
+            x: canvasWidth / 2 - 35,
+            y: canvasHeight / 2,
+            mass: 6
+          },
+          {
+            x: canvasWidth / 2,
+            y: canvasHeight / 2 - 40,
+            mass: 7
+          }
+        ]
+      })
+      
+      // Manually kick velocities for visible orbits (preview-only, doesn't affect physics correctness)
+      sim.stars.forEach((star, i) => {
+        if (i === 0) return // Skip central mass
+        // Give each star a visible orbital velocity
+        const angle = (i - 1) * (Math.PI * 2 / (sim.stars.length - 1))
+        const speed = 20 + (i * 3) // Vary speeds for visual interest
+        star.vx = Math.cos(angle + Math.PI / 2) * speed
+        star.vy = Math.sin(angle + Math.PI / 2) * speed
+        // Sync half-step velocities
+        star.vxHalf = star.vx
+        star.vyHalf = star.vy
       })
     })
     
@@ -87,10 +124,6 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
           if (ctx) {
             ctx.fillStyle = '#000000' // Darker background for better contrast
             ctx.fillRect(0, 0, canvasWidth, canvasHeight)
-            
-            // Debug: Force a red pixel to verify canvas is drawing
-            ctx.fillStyle = '#ff0000'
-            ctx.fillRect(0, 0, 4, 4)
             
             // Bulletproof preview star rendering - guard against NaN/undefined
             sim.stars.forEach((star) => {
