@@ -91,40 +91,55 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
           if (ctx) {
             ctx.fillStyle = '#0a0a0a'
             ctx.fillRect(0, 0, canvas.width, canvas.height)
-            // Enhanced star rendering for preview - make stars more visible
-            sim.stars.forEach(star => {
-              // Ensure minimum visible size
-              const minRadius = 1
-              const displayRadius = Math.max(minRadius, star.radius)
-              
-              // Use brighter opacity based on mass, but ensure minimum visibility
-              const opacity = Math.max(0.6, Math.min(star.mass / 30, 1))
-              
-              // Add a simple glow effect for better visibility
-              const glowRadius = displayRadius * 2
-              const glowGradient = ctx.createRadialGradient(
-                star.x, star.y, 0,
-                star.x, star.y, glowRadius
-              )
-              glowGradient.addColorStop(0, `rgba(255, 255, 255, ${opacity})`)
-              glowGradient.addColorStop(0.5, `rgba(255, 255, 255, ${opacity * 0.3})`)
-              glowGradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
-              
-              ctx.fillStyle = glowGradient
-              ctx.beginPath()
-              ctx.arc(star.x, star.y, glowRadius, 0, Math.PI * 2)
-              ctx.fill()
-              
-              // Draw the star core
-              ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`
-              ctx.beginPath()
-              ctx.arc(star.x, star.y, displayRadius, 0, Math.PI * 2)
-              ctx.fill()
-            })
+            
+            // Scale factor based on canvas height vs original universe height
+            const scaleFactor = height / initialUniverse.height
+            
+            // Render stars - ensure they're visible
+            if (sim.stars.length > 0) {
+              ctx.fillStyle = '#ffffff'
+              for (const star of sim.stars) {
+                // Ensure star is within canvas bounds (with some margin for glow)
+                if (star.x < -50 || star.x > width + 50 || star.y < -50 || star.y > height + 50) {
+                  continue // Skip stars way outside bounds
+                }
+                
+                // For preview, use a more visible radius calculation
+                // Don't scale down too much - ensure stars are always visible
+                const baseRadius = star.radius
+                // Use a minimum radius that's visible on small canvas (3px minimum)
+                // Scale up smaller stars more aggressively for visibility
+                const minVisibleRadius = 3
+                const scaledRadius = baseRadius * scaleFactor
+                // Boost radius significantly for visibility, ensure at least 3px
+                const displayRadius = Math.max(minVisibleRadius, scaledRadius * 2.5)
+                
+                // Add glow effect for better visibility (larger glow)
+                const glowRadius = Math.max(6, displayRadius * 2.5)
+                const glowGradient = ctx.createRadialGradient(
+                  star.x, star.y, 0,
+                  star.x, star.y, glowRadius
+                )
+                glowGradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)')
+                glowGradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.5)')
+                glowGradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+                
+                ctx.fillStyle = glowGradient
+                ctx.beginPath()
+                ctx.arc(star.x, star.y, glowRadius, 0, Math.PI * 2)
+                ctx.fill()
+                
+                // Draw bright star core
+                ctx.fillStyle = '#ffffff'
+                ctx.beginPath()
+                ctx.arc(star.x, star.y, displayRadius, 0, Math.PI * 2)
+                ctx.fill()
+              }
+            }
             
             // Render central sun if it exists
             if (sim.centralSun) {
-              const sunRadius = Math.max(2, sim.centralSun.radius)
+              const sunRadius = Math.max(3, sim.centralSun.radius * scaleFactor)
               ctx.fillStyle = '#ffff00'
               ctx.beginPath()
               ctx.arc(sim.centralSun.x, sim.centralSun.y, sunRadius, 0, Math.PI * 2)
