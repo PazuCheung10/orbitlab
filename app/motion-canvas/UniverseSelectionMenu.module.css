@@ -10,6 +10,7 @@
   justify-content: center;
   z-index: 10000;
   backdrop-filter: blur(10px);
+  cursor: default;
 }
 
 .menu {
@@ -23,6 +24,7 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
   width: 90vw;
   margin: 0 auto;
+  cursor: default;
 }
 
 @media (max-width: 768px) {
