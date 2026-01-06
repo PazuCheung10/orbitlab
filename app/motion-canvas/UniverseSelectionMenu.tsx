@@ -170,8 +170,8 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
         if (!ctx) return
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
         
-        // Slow down thumbnails for better visibility (0.5x speed)
-        sim.update(0.008) // Half speed for preview thumbnails
+        // Slow down thumbnails for better visibility (much slower for clearer preview)
+        sim.update(0.003) // Very slow speed for preview thumbnails (about 0.2x normal speed)
         
         // Clear and draw background
         ctx.fillStyle = '#000'

@@ -241,9 +241,9 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
               Gravity Constant: {localConfig.gravityConstant}
               <input
                 type="range"
-                min="10000"
-                max="40000"
-                step="500"
+                min="0"
+                max="30000"
+                step="1000"
                 value={localConfig.gravityConstant}
                 onChange={(e) => updateConfig('gravityConstant', parseInt(e.target.value))}
               />
