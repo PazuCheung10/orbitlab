@@ -169,14 +169,39 @@ export class Star {
     return Math.sqrt(dx * dx + dy * dy)
   }
 
-  mergeWith(other: Star): Star {
+  mergeWith(other: Star, width?: number, height?: number, enableWrapping?: boolean): Star {
     // Combine masses (conservation of mass)
     const totalMass = this.mass + other.mass
     
-    // Center of mass position
+    // Center of mass position - use minimum-image convention if wrapping is enabled
+    let otherX = other.x
+    let otherY = other.y
+    
+    if (enableWrapping && width !== undefined && height !== undefined) {
+      // Unwrap other star's position relative to this star using minimum-image convention
+      let dx = other.x - this.x
+      let dy = other.y - this.y
+      
+      // Apply minimum-image convention
+      if (dx > width / 2) dx -= width
+      else if (dx < -width / 2) dx += width
+      if (dy > height / 2) dy -= height
+      else if (dy < -height / 2) dy += height
+      
+      // Compute unwrapped position of other star
+      otherX = this.x + dx
+      otherY = this.y + dy
+      
+      // Wrap the result back into bounds
+      while (otherX < 0) otherX += width
+      while (otherX >= width) otherX -= width
+      while (otherY < 0) otherY += height
+      while (otherY >= height) otherY -= height
+    }
+    
     const totalMassInv = 1 / totalMass
-    const newX = (this.x * this.mass + other.x * other.mass) * totalMassInv
-    const newY = (this.y * this.mass + other.y * other.mass) * totalMassInv
+    const newX = (this.x * this.mass + otherX * other.mass) * totalMassInv
+    const newY = (this.y * this.mass + otherY * other.mass) * totalMassInv
     
     // Conservation of momentum
     const newVx = (this.vx * this.mass + other.vx * other.mass) * totalMassInv

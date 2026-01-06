@@ -240,7 +240,7 @@ export class GravitySimulation {
   config: GravityConfig
   width: number
   height: number
-  centralSun: Star | null = null // Central sun for ORBIT_PLAYGROUND mode
+  centralSun: Star | null = null // DEPRECATED: Not used in current implementation (ORBIT_PLAYGROUND uses full pairwise gravity)
   
   // Star creation state
   isCreating: boolean = false
@@ -269,6 +269,7 @@ export class GravitySimulation {
     total: number
     history: number[] // Last 100 values for trend analysis
     trend: 'stable' | 'decreasing' | 'increasing' // Energy trend
+    mergeEvents: Array<{ frame: number; energyPreMerge: number; energyPostMerge: number; deltaEnergy: number }> // Track merge energy changes
   } | null = null
 
   constructor(width: number, height: number, config: GravityConfig) {
@@ -314,10 +315,12 @@ export class GravitySimulation {
       const v = vCirc * this.config.orbitFactor
       
       // Velocity direction = perpendicular to radius (tangential)
-      // Small random deviation allowed: ±10% max for subtle variation
+      // Angle calculation for initial velocity
+      // NOTE: For A/B tests, set randomDeviation to 0 for deterministic initial conditions
+      // For seeded RNG, replace Math.random() with seeded random function
       const angle = Math.atan2(dy, dx)
       const tangentialAngle = angle + Math.PI / 2 // Perpendicular to radius (tangential)
-      const randomDeviation = (Math.random() - 0.5) * 0.1 // ±10% (0.1 radians ≈ ±5.7 degrees)
+      const randomDeviation = 0 // Disabled for deterministic A/B tests (was: (Math.random() - 0.5) * 0.1)
       const finalAngle = tangentialAngle + randomDeviation
       
       const vx = Math.cos(finalAngle) * v
@@ -614,17 +617,34 @@ export class GravitySimulation {
   }
 
   update(deltaTime: number): void {
-    // Clamp deltaTime for numerical stability (dt ≤ 0.01s for ORBIT_PLAYGROUND)
-    const maxDt = this.config.physicsMode === PhysicsMode.ORBIT_PLAYGROUND ? 0.01 : 0.1
-    const dt = Math.min(deltaTime, maxDt)
-    
-    // Update ripples
+    // Update ripples (non-physics updates)
     const now = performance.now() / 1000
     this.ripples = this.ripples.filter(ripple => {
       const age = now - ripple.time
       return age < ripple.duration
     })
     
+    // Substep loop: break large deltaTime into smaller steps for numerical stability
+    const maxDt = this.config.physicsMode === PhysicsMode.ORBIT_PLAYGROUND ? 0.01 : 0.1
+    let remainingTime = deltaTime
+    let frameCount = 0
+    
+    while (remainingTime > 0) {
+      const dt = Math.min(remainingTime, maxDt)
+      this.step(dt)
+      remainingTime -= dt
+      frameCount++
+    }
+    
+    // Update energy diagnostics after all substeps
+    this.updateEnergyStats()
+  }
+  
+  /**
+   * Single physics step with fixed timestep dt
+   * Performs one complete leapfrog integration step
+   */
+  step(dt: number): void {
     // LEAPFROG INTEGRATOR: Two-pass update
     // Pass 1: Compute accelerations and apply first kick + drift
     const accelerations: Array<{ ax: number; ay: number }> = []
@@ -635,7 +655,7 @@ export class GravitySimulation {
       let ay = 0
       
       if (this.config.physicsMode === PhysicsMode.ORBIT_PLAYGROUND) {
-        // ORBIT_PLAYGROUND: Full pairwise gravity (no central sun)
+        // ORBIT_PLAYGROUND: Full pairwise gravity (all stars attract each other)
         // All stars attract each other
         for (let j = 0; j < this.stars.length; j++) {
           if (i === j) continue
@@ -781,6 +801,32 @@ export class GravitySimulation {
       const toRemove: Set<number> = new Set()
       const toAdd: Star[] = []
       
+      // Calculate energy before merge (for diagnostics)
+      let energyPreMerge: number | null = null
+      if (this.energyStats) {
+        energyPreMerge = this.energyStats.total
+      } else {
+        // Calculate energy on-the-fly if stats not initialized
+        let kinetic = 0
+        let potential = 0
+        for (const star of this.stars) {
+          kinetic += 0.5 * star.mass * (star.vx * star.vx + star.vy * star.vy)
+        }
+        for (let i = 0; i < this.stars.length; i++) {
+          for (let j = i + 1; j < this.stars.length; j++) {
+            let dx = this.stars[j].x - this.stars[i].x
+            let dy = this.stars[j].y - this.stars[i].y
+            if (this.config.enableBoundaryWrapping) {
+              dx = minImageDelta(dx, this.width)
+              dy = minImageDelta(dy, this.height)
+            }
+            const r = Math.sqrt(dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx)
+            potential -= (this.config.gravityConstant * this.stars[i].mass * this.stars[j].mass) / r
+          }
+        }
+        energyPreMerge = kinetic + potential
+      }
+      
       for (let i = 0; i < this.stars.length; i++) {
         if (toRemove.has(i)) continue
         
@@ -800,8 +846,13 @@ export class GravitySimulation {
           const r2 = this.stars[j].radius
           const mergeDistance = r1 + r2 // Merge when stars touch (distance = sum of radii)
           if (distance < mergeDistance) {
-            // Merge stars
-            const mergedStar = this.stars[i].mergeWith(this.stars[j])
+            // Merge stars (wrapping-safe)
+            const mergedStar = this.stars[i].mergeWith(
+              this.stars[j],
+              this.width,
+              this.height,
+              this.config.enableBoundaryWrapping
+            )
             toRemove.add(i)
             toRemove.add(j)
             toAdd.push(mergedStar)
@@ -818,10 +869,56 @@ export class GravitySimulation {
       
       // Add merged stars
       this.stars.push(...toAdd)
+      
+      // Record merge energy change (if any merges occurred)
+      if (toRemove.size > 0 && energyPreMerge !== null) {
+        // Calculate energy after merge
+        let kinetic = 0
+        let potential = 0
+        for (const star of this.stars) {
+          kinetic += 0.5 * star.mass * (star.vx * star.vx + star.vy * star.vy)
+        }
+        for (let i = 0; i < this.stars.length; i++) {
+          for (let j = i + 1; j < this.stars.length; j++) {
+            let dx = this.stars[j].x - this.stars[i].x
+            let dy = this.stars[j].y - this.stars[i].y
+            if (this.config.enableBoundaryWrapping) {
+              dx = minImageDelta(dx, this.width)
+              dy = minImageDelta(dy, this.height)
+            }
+            const r = Math.sqrt(dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx)
+            potential -= (this.config.gravityConstant * this.stars[i].mass * this.stars[j].mass) / r
+          }
+        }
+        const energyPostMerge = kinetic + potential
+        const deltaEnergy = energyPostMerge - energyPreMerge
+        
+        // Record merge event
+        if (!this.energyStats) {
+          this.energyStats = {
+            kinetic: 0,
+            potential: 0,
+            total: 0,
+            history: [],
+            trend: 'stable',
+            mergeEvents: []
+          }
+        }
+        if (!this.energyStats.mergeEvents) {
+          this.energyStats.mergeEvents = []
+        }
+        this.energyStats.mergeEvents.push({
+          frame: this.energyStats.history.length,
+          energyPreMerge,
+          energyPostMerge,
+          deltaEnergy
+        })
+        // Keep only last 50 merge events
+        if (this.energyStats.mergeEvents.length > 50) {
+          this.energyStats.mergeEvents.shift()
+        }
+      }
     }
-    
-    // Update energy diagnostics (using same dx/dy method as force calculations)
-    this.updateEnergyStats()
   }
   
   /**
@@ -872,7 +969,8 @@ export class GravitySimulation {
         potential,
         total,
         history: [total],
-        trend: 'stable'
+        trend: 'stable',
+        mergeEvents: []
       }
     } else {
       this.energyStats.kinetic = kinetic

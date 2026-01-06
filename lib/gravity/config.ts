@@ -7,8 +7,8 @@
 // ============================================================================
 
 export enum PhysicsMode {
-  ORBIT_PLAYGROUND = 'ORBIT_PLAYGROUND', // Central sun, satellites orbit (stable, readable)
-  N_BODY_CHAOS = 'N_BODY_CHAOS' // Full pairwise gravity (chaotic)
+  ORBIT_PLAYGROUND = 'ORBIT_PLAYGROUND', // Full pairwise gravity (stable orbits, energy-conserving)
+  N_BODY_CHAOS = 'N_BODY_CHAOS' // Full pairwise gravity (chaotic, with damping/clamping)
 }
 
 // ============================================================================
@@ -44,7 +44,7 @@ export const ORBIT_FACTOR = 1.0 // Multiplier for initial orbital velocity (0.7-
 // Mass growth (same for all universes)
 export const HOLD_TO_MAX_SECONDS = 5.0 // Time to hold to reach max mass (seconds) - 5 seconds steady
 export const MIN_MASS = 30 // Minimum mass (initial mass when starting to create) - increased for bigger user-created stars
-export const MAX_MASS = 20 // Maximum mass (all universes)
+export const MAX_MASS = 100 // Maximum mass (all universes) - must be >= MIN_MASS
 
 // Angular Momentum Guidance (LAUNCH ASSIST ONLY)
 export const ANGULAR_GUIDANCE_STRENGTH = 0.6 // How strongly to guide toward orbital motion at launch (0-1)
@@ -169,8 +169,8 @@ export const GRAVITY_CONFIG: GravityConfig = {
   orbitalCenterSearchRadius: ORBITAL_CENTER_SEARCH_RADIUS,
   
   // Visual (fixed values)
-  glowRadiusMultiplier: 0.06,
-  opacityMultiplier: 0.02,
+  glowRadiusMultiplier: 0.05,
+  opacityMultiplier: 0.004,
   starTrailLength: 15,
   starTrailFadeTime: 0.5,
   

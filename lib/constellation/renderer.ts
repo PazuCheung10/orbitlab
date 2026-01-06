@@ -45,12 +45,12 @@ export class Renderer {
     for (const connType of simulation.connections) {
       if (connType.type === 'constellation') {
         const conn = connType.connection
-        if (conn.strength > 0.05) {
+      if (conn.strength > 0.05) {
           this.ctx.globalAlpha = conn.getOpacity(this.config, 'constellation')
-          this.ctx.beginPath()
-          this.ctx.moveTo(conn.nodeA.x, conn.nodeA.y)
-          this.ctx.lineTo(conn.nodeB.x, conn.nodeB.y)
-          this.ctx.stroke()
+        this.ctx.beginPath()
+        this.ctx.moveTo(conn.nodeA.x, conn.nodeA.y)
+        this.ctx.lineTo(conn.nodeB.x, conn.nodeB.y)
+        this.ctx.stroke()
         }
       }
     }

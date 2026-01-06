@@ -116,27 +116,27 @@ export class Simulation {
     
     // Only create new constellation connections if under max total edges
     if (existingConstellationCount < this.config.maxTotalEdges) {
-      for (let i = 0; i < activeNodes.length; i++) {
-        const nodeA = activeNodes[i]
-        const nearbyNodes: Array<{ node: Node; distance: number }> = []
+    for (let i = 0; i < activeNodes.length; i++) {
+      const nodeA = activeNodes[i]
+      const nearbyNodes: Array<{ node: Node; distance: number }> = []
 
-        // Find nearby active nodes
-        for (let j = 0; j < activeNodes.length; j++) {
-          if (i === j) continue
-          const nodeB = activeNodes[j]
-          const distance = nodeA.distanceToNode(nodeB)
+      // Find nearby active nodes
+      for (let j = 0; j < activeNodes.length; j++) {
+        if (i === j) continue
+        const nodeB = activeNodes[j]
+        const distance = nodeA.distanceToNode(nodeB)
 
           if (distance < this.config.nodeConnectionRadius) {
-            nearbyNodes.push({ node: nodeB, distance })
-          }
+          nearbyNodes.push({ node: nodeB, distance })
         }
+      }
 
-        // Sort by distance and take top N
-        nearbyNodes.sort((a, b) => a.distance - b.distance)
+      // Sort by distance and take top N
+      nearbyNodes.sort((a, b) => a.distance - b.distance)
         const topNodes = nearbyNodes.slice(0, this.config.maxConnectionsPerNode)
 
         // Create connections if they don't exist and under max edges
-        for (const { node: nodeB } of topNodes) {
+      for (const { node: nodeB } of topNodes) {
           if (constellationConnections.length + existingConstellationCount >= this.config.maxTotalEdges) {
             break
           }
@@ -145,9 +145,9 @@ export class Simulation {
             connType.type === 'constellation' &&
             ((connType.connection.nodeA === nodeA && connType.connection.nodeB === nodeB) ||
              (connType.connection.nodeA === nodeB && connType.connection.nodeB === nodeA))
-          )
+        )
 
-          if (!exists) {
+        if (!exists) {
             constellationConnections.push({
               type: 'constellation',
               connection: new Connection(nodeA, nodeB)
@@ -176,10 +176,10 @@ export class Simulation {
       if (connType.type === 'constellation') {
         const conn = connType.connection
         if (conn.nodeA.energy > 0.1 && conn.nodeB.energy > 0.1 && !conn.isDecaying) {
-          if (!adjMap.has(conn.nodeA)) adjMap.set(conn.nodeA, [])
-          if (!adjMap.has(conn.nodeB)) adjMap.set(conn.nodeB, [])
-          adjMap.get(conn.nodeA)!.push(conn.nodeB)
-          adjMap.get(conn.nodeB)!.push(conn.nodeA)
+        if (!adjMap.has(conn.nodeA)) adjMap.set(conn.nodeA, [])
+        if (!adjMap.has(conn.nodeB)) adjMap.set(conn.nodeB, [])
+        adjMap.get(conn.nodeA)!.push(conn.nodeB)
+        adjMap.get(conn.nodeB)!.push(conn.nodeA)
         }
       }
     }
