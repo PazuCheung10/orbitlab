@@ -141,8 +141,13 @@ export default function MotionCanvasPage() {
         onConfigChange={handleConfigChange}
         starCount={starCount}
         onClearStars={() => {
-          if (systemRef.current) {
+          if (systemRef.current && typeof systemRef.current.clearAllStars === 'function') {
             systemRef.current.clearAllStars()
+            setStarCount(0)
+            setDebugStats(null)
+          } else if (systemRef.current?.simulation) {
+            // Fallback: call directly on simulation if method doesn't exist yet
+            systemRef.current.simulation.clearAllStars()
             setStarCount(0)
             setDebugStats(null)
           }

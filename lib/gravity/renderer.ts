@@ -156,7 +156,15 @@ export class GravityRenderer {
     this.ctx.stroke()
   }
 
-  private drawCreatingStar(state: { x: number; y: number; radius: number }, cursorX: number, cursorY: number): void {
+  private drawCreatingStar(state: { 
+    x: number
+    y: number
+    radius: number
+    mass: number
+    estimatedVelocity: number
+    vCirc?: number
+    vEsc?: number
+  }, cursorX: number, cursorY: number): void {
     // Draw growing star with subtle pulse
     const pulse = 1 + Math.sin(performance.now() / 100) * 0.1
     let radius = state.radius * pulse
@@ -206,15 +214,83 @@ export class GravityRenderer {
       const dist = Math.sqrt(dx * dx + dy * dy)
       
       if (dist > 2) {
-        // Draw subtle direction indicator
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'
-        this.ctx.lineWidth = 1
+        // Draw direction indicator with velocity preview
+        const dirLen = Math.min(50, state.estimatedVelocity * 0.1) // Scale preview
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'
+        this.ctx.lineWidth = 2
         this.ctx.beginPath()
         this.ctx.moveTo(state.x, state.y)
-        this.ctx.lineTo(state.x + dx * 0.5, state.y + dy * 0.5)
+        this.ctx.lineTo(state.x + (dx / dist) * dirLen, state.y + (dy / dist) * dirLen)
+        this.ctx.stroke()
+        
+        // Draw arrowhead
+        const arrowLen = 8
+        const angle = Math.atan2(dy, dx)
+        this.ctx.beginPath()
+        this.ctx.moveTo(
+          state.x + (dx / dist) * dirLen,
+          state.y + (dy / dist) * dirLen
+        )
+        this.ctx.lineTo(
+          state.x + (dx / dist) * dirLen - arrowLen * Math.cos(angle - Math.PI / 6),
+          state.y + (dy / dist) * dirLen - arrowLen * Math.sin(angle - Math.PI / 6)
+        )
+        this.ctx.moveTo(
+          state.x + (dx / dist) * dirLen,
+          state.y + (dy / dist) * dirLen
+        )
+        this.ctx.lineTo(
+          state.x + (dx / dist) * dirLen - arrowLen * Math.cos(angle + Math.PI / 6),
+          state.y + (dy / dist) * dirLen - arrowLen * Math.sin(angle + Math.PI / 6)
+        )
         this.ctx.stroke()
       }
     }
+    
+    // Draw real-time feedback text
+    this.ctx.save()
+    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
+    this.ctx.font = '12px monospace'
+    this.ctx.textAlign = 'left'
+    this.ctx.textBaseline = 'top'
+    
+    const infoY = state.y + radius + 15
+    let lineHeight = 16
+    let currentY = infoY
+    
+    // Mass
+    this.ctx.fillText(`Mass: ${state.mass.toFixed(1)}`, state.x + radius + 10, currentY)
+    currentY += lineHeight
+    
+    // Estimated velocity
+    if (state.estimatedVelocity > 0) {
+      this.ctx.fillText(`Velocity: ${state.estimatedVelocity.toFixed(1)} px/s`, state.x + radius + 10, currentY)
+      currentY += lineHeight
+      
+      // Orbital parameters if available
+      if (state.vCirc !== undefined) {
+        const ratio = state.estimatedVelocity / state.vCirc
+        let color = 'rgba(255, 255, 255, 0.9)'
+        if (ratio < 0.8) color = 'rgba(255, 200, 0, 0.9)' // Too slow (yellow)
+        else if (ratio > 1.2) color = 'rgba(255, 100, 100, 0.9)' // Too fast (red)
+        else color = 'rgba(100, 255, 100, 0.9)' // Good (green)
+        
+        this.ctx.fillStyle = color
+        this.ctx.fillText(`v_circ: ${state.vCirc.toFixed(1)} px/s`, state.x + radius + 10, currentY)
+        currentY += lineHeight
+        
+        if (state.vEsc !== undefined) {
+          this.ctx.fillText(`v_esc: ${state.vEsc.toFixed(1)} px/s`, state.x + radius + 10, currentY)
+          currentY += lineHeight
+          
+          // Show ratio
+          this.ctx.fillStyle = 'rgba(200, 200, 255, 0.9)'
+          this.ctx.fillText(`Ratio: ${ratio.toFixed(2)}x`, state.x + radius + 10, currentY)
+        }
+      }
+    }
+    
+    this.ctx.restore()
   }
 
   private drawRipple(ripple: { x: number; y: number; time: number; maxRadius: number; duration: number }, now: number): void {

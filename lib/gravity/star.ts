@@ -78,14 +78,16 @@ export class Star {
       }
     }
     
-    // Periodic boundary conditions
+    // Periodic boundary conditions (only if enabled)
     // WARNING: Boundary wrapping breaks energy conservation in orbital mechanics
     // For stable orbits, consider disabling wrapping or using larger invisible bounds
-    // Current implementation wraps position but this causes energy loss
-    while (this.x < 0) this.x += width
-    while (this.x >= width) this.x -= width
-    while (this.y < 0) this.y += height
-    while (this.y >= height) this.y -= height
+    if (config.enableBoundaryWrapping) {
+      while (this.x < 0) this.x += width
+      while (this.x >= width) this.x -= width
+      while (this.y < 0) this.y += height
+      while (this.y >= height) this.y -= height
+    }
+    // If wrapping is disabled, stars can move freely outside bounds (or you could add bounce/clamp logic here)
     
     // Update age
     this.age += deltaTime

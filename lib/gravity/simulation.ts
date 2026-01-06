@@ -641,9 +641,13 @@ export class GravitySimulation {
           if (i === j) continue
           const starB = this.stars[j]
           
-          // Use minimum-image convention for periodic boundaries (torus wrapping)
-          const dx = minImageDelta(starB.x - starA.x, this.width)
-          const dy = minImageDelta(starB.y - starA.y, this.height)
+          // Use minimum-image convention ONLY if boundary wrapping is enabled
+          let dx = starB.x - starA.x
+          let dy = starB.y - starA.y
+          if (this.config.enableBoundaryWrapping) {
+            dx = minImageDelta(dx, this.width)
+            dy = minImageDelta(dy, this.height)
+          }
           const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
           const r = Math.sqrt(r2)
           const invR = 1 / r
@@ -666,9 +670,13 @@ export class GravitySimulation {
           
           const starB = this.stars[j]
           
-          // Use minimum-image convention for periodic boundaries (torus wrapping)
-          const dx = minImageDelta(starB.x - starA.x, this.width)
-          const dy = minImageDelta(starB.y - starA.y, this.height)
+          // Use minimum-image convention ONLY if boundary wrapping is enabled
+          let dx = starB.x - starA.x
+          let dy = starB.y - starA.y
+          if (this.config.enableBoundaryWrapping) {
+            dx = minImageDelta(dx, this.width)
+            dy = minImageDelta(dy, this.height)
+          }
           
           // Plummer softening: r² = dx² + dy² + eps²
           const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
@@ -708,9 +716,13 @@ export class GravitySimulation {
           if (i === j) continue
           const starB = this.stars[j]
           
-          // Use minimum-image convention for periodic boundaries (torus wrapping)
-          const dx = minImageDelta(starB.x - starA.x, this.width)
-          const dy = minImageDelta(starB.y - starA.y, this.height)
+          // Use minimum-image convention ONLY if boundary wrapping is enabled
+          let dx = starB.x - starA.x
+          let dy = starB.y - starA.y
+          if (this.config.enableBoundaryWrapping) {
+            dx = minImageDelta(dx, this.width)
+            dy = minImageDelta(dy, this.height)
+          }
           const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
           const r = Math.sqrt(r2)
           const invR = 1 / r
@@ -733,9 +745,13 @@ export class GravitySimulation {
           
           const starB = this.stars[j]
           
-          // Use minimum-image convention for periodic boundaries (torus wrapping)
-          const dx = minImageDelta(starB.x - starA.x, this.width)
-          const dy = minImageDelta(starB.y - starA.y, this.height)
+          // Use minimum-image convention ONLY if boundary wrapping is enabled
+          let dx = starB.x - starA.x
+          let dy = starB.y - starA.y
+          if (this.config.enableBoundaryWrapping) {
+            dx = minImageDelta(dx, this.width)
+            dy = minImageDelta(dy, this.height)
+          }
           
           // Plummer softening: r² = dx² + dy² + eps²
           const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
@@ -778,11 +794,11 @@ export class GravitySimulation {
             this.height,
             this.config.enableBoundaryWrapping
           )
-          // Merge when smaller star is inside larger star: distance < (r2 - r1) / 2 (where r2 > r1)
-          // Merge distance is now 1/2 of the previous value
-          const r1 = Math.min(this.stars[i].radius, this.stars[j].radius)
-          const r2 = Math.max(this.stars[i].radius, this.stars[j].radius)
-          const mergeDistance = (r2 - r1) * 0.5 // Half of previous merge distance
+          // Merge when stars touch: distance between centers < sum of radii
+          // This means stars merge as soon as their edges touch
+          const r1 = this.stars[i].radius
+          const r2 = this.stars[j].radius
+          const mergeDistance = r1 + r2 // Merge when stars touch (distance = sum of radii)
           if (distance < mergeDistance) {
             // Merge stars
             const mergedStar = this.stars[i].mergeWith(this.stars[j])
@@ -833,9 +849,13 @@ export class GravitySimulation {
         const starA = this.stars[i]
         const starB = this.stars[j]
         
-        // Use minimum-image convention (same as force calculations)
-        const dx = minImageDelta(starB.x - starA.x, this.width)
-        const dy = minImageDelta(starB.y - starA.y, this.height)
+        // Use minimum-image convention (same as force calculations) - only if wrapping enabled
+        let dx = starB.x - starA.x
+        let dy = starB.y - starA.y
+        if (this.config.enableBoundaryWrapping) {
+          dx = minImageDelta(dx, this.width)
+          dy = minImageDelta(dy, this.height)
+        }
         const r = Math.sqrt(dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx)
         
         // Potential energy: U = -G * m1 * m2 / r
@@ -890,7 +910,15 @@ export class GravitySimulation {
     return this.energyStats
   }
 
-  getCreationState(): { x: number; y: number; radius: number } | null {
+  getCreationState(): { 
+    x: number
+    y: number
+    radius: number
+    mass: number
+    estimatedVelocity: number
+    vCirc?: number
+    vEsc?: number
+  } | null {
     if (!this.isCreating) return null
     
     const now = performance.now() / 1000
@@ -910,10 +938,73 @@ export class GravitySimulation {
     // Radius is derived from mass (final radius is half of calculated value)
     const radius = (Math.pow(mass, this.config.radiusPower) * this.config.radiusScale) / 2
     
+    // Estimate launch velocity from cursor movement
+    let estimatedVelocity = 0
+    if (this.cursorHistory.length >= 2) {
+      const flickWindowSeconds = this.config.flickWindowMs / 1000
+      const flickCutoff = now - flickWindowSeconds
+      const flickHistory = this.cursorHistory.filter(point => point.time > flickCutoff)
+      
+      if (flickHistory.length >= 2) {
+        let totalDx = 0
+        let totalDy = 0
+        
+        for (let i = 1; i < flickHistory.length; i++) {
+          const dt = flickHistory[i].time - flickHistory[i - 1].time
+          if (dt > 0) {
+            totalDx += (flickHistory[i].x - flickHistory[i - 1].x) / dt
+            totalDy += (flickHistory[i].y - flickHistory[i - 1].y) / dt
+          }
+        }
+        
+        if (flickHistory.length > 1) {
+          const rawVx = totalDx / (flickHistory.length - 1)
+          const rawVy = totalDy / (flickHistory.length - 1)
+          const rawSpeed = Math.sqrt(rawVx * rawVx + rawVy * rawVy)
+          
+          // Apply same transformations as actual launch
+          const compressedSpeed = Math.min(this.config.flickVmax, this.config.flickVmax * (1 - Math.exp(-Math.min(rawSpeed, 550) / this.config.flickS0)))
+          const launchSpeed = compressedSpeed * this.config.launchStrength
+          const massResistance = 1 - (mass / currentMaxMass) * this.config.massResistanceFactor
+          estimatedVelocity = launchSpeed * massResistance
+        }
+      }
+    }
+    
+    // Calculate orbital parameters if near other stars
+    let vCirc: number | undefined
+    let vEsc: number | undefined
+    if (this.stars.length > 0) {
+      const position = { x: this.creationX, y: this.creationY }
+      const orbitalCenter = findOrbitalCenter(
+        position,
+        this.stars,
+        this.config.orbitalCenterSearchRadius,
+        this.width,
+        this.height,
+        this.config.enableBoundaryWrapping
+      )
+      
+      if (orbitalCenter) {
+        const r = Math.sqrt(
+          Math.pow(position.x - orbitalCenter.center.x, 2) + 
+          Math.pow(position.y - orbitalCenter.center.y, 2)
+        )
+        if (r > 0) {
+          vCirc = Math.sqrt((this.config.gravityConstant * orbitalCenter.totalMass) / r)
+          vEsc = Math.sqrt(2 * (this.config.gravityConstant * orbitalCenter.totalMass) / r)
+        }
+      }
+    }
+    
     return {
       x: this.creationX,
       y: this.creationY,
-      radius
+      radius,
+      mass,
+      estimatedVelocity,
+      vCirc,
+      vEsc
     }
   }
   

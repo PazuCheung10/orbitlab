@@ -43,7 +43,7 @@ export const ORBIT_FACTOR = 1.0 // Multiplier for initial orbital velocity (0.7-
 
 // Mass growth (same for all universes)
 export const HOLD_TO_MAX_SECONDS = 5.0 // Time to hold to reach max mass (seconds) - 5 seconds steady
-export const MIN_MASS = 5 // Minimum mass (initial mass when starting to create)
+export const MIN_MASS = 30 // Minimum mass (initial mass when starting to create) - increased for bigger user-created stars
 export const MAX_MASS = 20 // Maximum mass (all universes)
 
 // Angular Momentum Guidance (LAUNCH ASSIST ONLY)
