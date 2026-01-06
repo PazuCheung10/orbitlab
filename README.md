@@ -1,6 +1,6 @@
-# Motion Canvas
+# Orbit Lab
 
-Motion Canvas is an interactive gravity playground built to explore
+Orbit Lab is an interactive gravity playground built to explore
 how small physics assumptions change large-scale system behavior.
 
 This project focuses less on perfect physical accuracy, and more on

@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Motion Canvas',
-  description: 'An interactive constellation experience',
+  title: 'Orbit Lab',
+  description: 'An interactive gravity playground',
   viewport: {
     width: 'device-width',
     initialScale: 1,

@@ -222,7 +222,7 @@ export default function MotionCanvasPage() {
     <div className={styles.container}>
       <canvas ref={canvasRef} className={styles.canvas} />
       <div ref={titleRef} className={styles.title}>
-        Gravity Stars
+        Orbit Lab
       </div>
       
       {showSelectionMenu && (
