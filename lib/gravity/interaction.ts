@@ -14,6 +14,15 @@ export class GravityInteraction {
   }
 
   private setupEventListeners(): void {
+    // Track cursor globally (not just on canvas) so it's always visible
+    window.addEventListener('mousemove', (e) => {
+      const rect = this.canvas.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      this.cursorX = x
+      this.cursorY = y
+    })
+
     // Pointer down (start creation)
     this.canvas.addEventListener('pointerdown', (e) => {
       e.preventDefault()

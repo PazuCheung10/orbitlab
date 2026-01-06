@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { GravitySystem } from '@/lib/gravity/gravity'
 import { GRAVITY_CONFIG, GravityConfig } from '@/lib/gravity/config'
+import { Star } from '@/lib/gravity/star'
 import GravityDebugPanel from './GravityDebugPanel'
 import UniverseBrowser from './UniverseBrowser'
+import UniverseSelectionMenu from './UniverseSelectionMenu'
 // @ts-ignore - JSON import
 import initialUniverseData from '@/initial-universe.json'
 const initialUniverse = initialUniverseData as { width: number; height: number; stars: Array<{ x: number; y: number; mass: number }> }
@@ -45,15 +47,14 @@ export default function MotionCanvasPage() {
   
   const [config, setConfig] = useState<GravityConfig>(loadConfigFromStorage())
   const [currentUniverseKey, setCurrentUniverseKey] = useState<string | null>(null)
+  const currentUniverseKeyRef = useRef<string | null>(null) // Ref for accessing in intervals
   const [starCount, setStarCount] = useState(0)
-  const [debugStats, setDebugStats] = useState<{
-    holdDragSpeed: number
-    releaseFlickSpeed: number
-    compressedSpeed: number
-    finalLaunchSpeed: number
-    estimatedVCirc: number
-    estimatedVEsc: number
-  } | null>(null)
+  const [showSelectionMenu, setShowSelectionMenu] = useState(true) // Show menu on first load
+  
+  // Store universe states (like TV channels - each maintains its own independent state)
+  // Key: universe identifier (e.g., "preset-0", "preset-1")
+  // Value: array of star states (positions, velocities, etc.)
+  const universeStatesRef = useRef<Map<string, Array<{ x: number; y: number; vx: number; vy: number; mass: number; vxHalf: number; vyHalf: number; age: number }>>>(new Map())
 
   useEffect(() => {
     if (!canvasRef.current) return
@@ -61,22 +62,24 @@ export default function MotionCanvasPage() {
     // Initialize gravity system
     systemRef.current = new GravitySystem(canvasRef.current, config)
 
-    // Update star count and debug stats periodically
-    const lastStatsTimeRef = { current: 0 }
+    // Update star count periodically
+    // Also save current universe state periodically (like auto-saving TV channel state)
     const countInterval = setInterval(() => {
-      if (systemRef.current) {
+      if (systemRef.current && currentUniverseKeyRef.current !== null) {
         setStarCount(systemRef.current.simulation.stars.length)
-        const stats = systemRef.current.simulation.getDebugStats()
-        if (stats) {
-          const now = Date.now()
-          // Only update stats if they're new (avoid unnecessary re-renders)
-          if (now - lastStatsTimeRef.current > 50) { // Throttle to max 20fps for stats
-            setDebugStats(stats)
-            lastStatsTimeRef.current = now
-            // Clear stats after 3 seconds
-            setTimeout(() => setDebugStats(null), 3000)
-          }
-        }
+        
+        // Auto-save current universe state (like pausing a TV channel)
+        const currentStars = systemRef.current.simulation.stars.map(star => ({
+          x: star.x,
+          y: star.y,
+          vx: star.vx,
+          vy: star.vy,
+          mass: star.mass,
+          vxHalf: star.vxHalf,
+          vyHalf: star.vyHalf,
+          age: star.age
+        }))
+        universeStatesRef.current.set(currentUniverseKeyRef.current, currentStars)
       }
     }, 100)
 
@@ -104,14 +107,7 @@ export default function MotionCanvasPage() {
     }
   }, [config])
   
-  // Load initial universe on mount
-  useEffect(() => {
-    if (systemRef.current) {
-      systemRef.current.loadUniverse(initialUniverse)
-      // Set initial universe key to prevent restart on first config update
-      setCurrentUniverseKey('initial')
-    }
-  }, [])
+  // Don't load initial universe automatically - wait for user selection
 
   const handleConfigChange = (newConfig: GravityConfig) => {
     setConfig(newConfig)
@@ -121,24 +117,104 @@ export default function MotionCanvasPage() {
     // Generate a unique key for this universe config
     const key = universeKey || JSON.stringify(newConfig)
     
-    // Only reload universe if it's a different universe (first time loading it)
-    // Clicking the same universe multiple times should NOT restart it
-    if (key !== currentUniverseKey) {
-      if (systemRef.current) {
+    if (systemRef.current) {
+      // Check if this is a saved state (starts with "saved-")
+      if (key.startsWith('saved-')) {
+        // Load from localStorage
+        try {
+          const saved = localStorage.getItem('gravitySavedStates')
+          if (saved) {
+            const savedStates = JSON.parse(saved) as Array<{
+              stars: Array<{ x: number; y: number; vx: number; vy: number; mass: number; vxHalf: number; vyHalf: number; age: number }>
+              config: GravityConfig
+              timestamp: number
+              name: string
+            }>
+            const timestamp = parseInt(key.replace('saved-', ''))
+            const savedState = savedStates.find(s => s.timestamp === timestamp)
+            if (savedState) {
+              // Restore stars
+              systemRef.current.simulation.stars = savedState.stars.map(starData => {
+                const star = new Star(
+                  starData.x,
+                  starData.y,
+                  starData.mass,
+                  starData.vx,
+                  starData.vy,
+                  savedState.config.radiusScale,
+                  savedState.config.radiusPower
+                )
+                star.vxHalf = starData.vxHalf
+                star.vyHalf = starData.vyHalf
+                star.age = starData.age
+                return star
+              })
+              // Use saved config
+              setConfig(savedState.config)
+              setCurrentUniverseKey(key)
+              currentUniverseKeyRef.current = key
+              setShowSelectionMenu(false) // Hide menu after selection
+              return
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load saved state:', e)
+        }
+      }
+      
+      // For preset universes, load fresh initial stars
+      if (key.startsWith('preset-')) {
         systemRef.current.loadUniverse(initialUniverse)
       }
-      setCurrentUniverseKey(key)
     }
     
-    // Always update config (switches universe settings without restarting)
-    // This allows switching between universes without restarting
+    setCurrentUniverseKey(key)
+    currentUniverseKeyRef.current = key // Keep ref in sync
     setConfig(newConfig)
+    setShowSelectionMenu(false) // Hide menu after selection
   }
   
   // Handler for reset button - explicitly restarts the current universe
   const handleResetUniverse = () => {
-    if (systemRef.current) {
+    if (systemRef.current && currentUniverseKey !== null) {
+      // Clear saved state for this universe
+      universeStatesRef.current.delete(currentUniverseKey)
+      // Reload fresh initial stars
       systemRef.current.loadUniverse(initialUniverse)
+    }
+  }
+
+  // Handler for saving current state
+  const handleSaveState = () => {
+    if (!systemRef.current) return
+    
+    const stars = systemRef.current.simulation.stars.map(star => ({
+      x: star.x,
+      y: star.y,
+      vx: star.vx,
+      vy: star.vy,
+      mass: star.mass,
+      vxHalf: star.vxHalf,
+      vyHalf: star.vyHalf,
+      age: star.age
+    }))
+    
+    const savedState = {
+      stars,
+      config: { ...config },
+      timestamp: Date.now(),
+      name: `Saved ${new Date().toLocaleString()}`
+    }
+    
+    try {
+      const existing = localStorage.getItem('gravitySavedStates')
+      const savedStates = existing ? JSON.parse(existing) : []
+      savedStates.push(savedState)
+      localStorage.setItem('gravitySavedStates', JSON.stringify(savedStates))
+      alert(`State saved! (${stars.length} stars)`)
+    } catch (e) {
+      console.error('Failed to save state:', e)
+      alert('Failed to save state')
     }
   }
 
@@ -148,29 +224,34 @@ export default function MotionCanvasPage() {
       <div ref={titleRef} className={styles.title}>
         Gravity Stars
       </div>
-      <UniverseBrowser
-        onLoadUniverse={handleLoadUniverse}
-        onResetUniverse={handleResetUniverse}
-        currentConfig={config}
-      />
-      <GravityDebugPanel
-        config={config}
-        onConfigChange={handleConfigChange}
-        starCount={starCount}
-        onClearStars={() => {
-          if (systemRef.current && typeof systemRef.current.clearAllStars === 'function') {
-            systemRef.current.clearAllStars()
-            setStarCount(0)
-            setDebugStats(null)
-          } else if (systemRef.current?.simulation) {
-            // Fallback: call directly on simulation if method doesn't exist yet
-            systemRef.current.simulation.clearAllStars()
-            setStarCount(0)
-            setDebugStats(null)
-          }
-        }}
-        debugStats={debugStats}
-      />
+      
+      {showSelectionMenu && (
+        <UniverseSelectionMenu
+          onSelectUniverse={handleLoadUniverse}
+          currentConfig={config}
+        />
+      )}
+      
+      {!showSelectionMenu && (
+        <>
+          <GravityDebugPanel
+            config={config}
+            onConfigChange={handleConfigChange}
+            starCount={starCount}
+            onSaveState={handleSaveState}
+            onClearStars={() => {
+              if (systemRef.current && typeof systemRef.current.clearAllStars === 'function') {
+                systemRef.current.clearAllStars()
+                setStarCount(0)
+              } else if (systemRef.current?.simulation) {
+                // Fallback: call directly on simulation if method doesn't exist yet
+                systemRef.current.simulation.clearAllStars()
+                setStarCount(0)
+              }
+            }}
+          />
+        </>
+      )}
     </div>
   )
 }

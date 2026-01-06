@@ -652,7 +652,7 @@ export class GravitySimulation {
     
     // Fixed timestep accumulator pattern for symplectic properties
     // This ensures dt is constant, preserving energy conservation
-    const fixedDt = this.config.physicsMode === PhysicsMode.ORBIT_PLAYGROUND ? 0.01 : 0.1
+    const fixedDt = 0.01
     this.timeAccumulator += deltaTime
     
     // Step with fixed dt until accumulator is depleted

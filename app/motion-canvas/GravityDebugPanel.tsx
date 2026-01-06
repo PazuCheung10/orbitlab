@@ -9,14 +9,7 @@ interface GravityDebugPanelProps {
   onConfigChange: (config: GravityConfig) => void
   starCount: number
   onClearStars?: () => void
-  debugStats?: {
-    holdDragSpeed: number
-    releaseFlickSpeed: number
-    compressedSpeed: number
-    finalLaunchSpeed: number
-    estimatedVCirc: number
-    estimatedVEsc: number
-  } | null
+  onSaveState?: () => void
   energyStats?: {
     kinetic: number
     potential: number
@@ -26,9 +19,10 @@ interface GravityDebugPanelProps {
   } | null
 }
 
-export default function GravityDebugPanel({ config, onConfigChange, starCount, onClearStars, debugStats, energyStats }: GravityDebugPanelProps) {
+export default function GravityDebugPanel({ config, onConfigChange, starCount, onClearStars, onSaveState, energyStats }: GravityDebugPanelProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [localConfig, setLocalConfig] = useState<GravityConfig>({ ...config })
+  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null)
 
   useEffect(() => {
     setLocalConfig({ ...config })
@@ -40,17 +34,53 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
     onConfigChange(newConfig)
   }
 
+  const handleHelpMouseEnter = (e: React.MouseEvent<HTMLSpanElement>, text: string) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const panelRect = e.currentTarget.closest(`.${styles.panel}`)?.getBoundingClientRect()
+    if (panelRect) {
+      // Position relative to panel
+      setTooltip({
+        text,
+        x: rect.left - panelRect.left + rect.width / 2,
+        y: rect.top - panelRect.top - 10
+      })
+    } else {
+      // Fallback to absolute positioning
+      setTooltip({
+        text,
+        x: rect.left + rect.width / 2,
+        y: rect.top - 10
+      })
+    }
+  }
+
+  const handleHelpMouseLeave = () => {
+    setTooltip(null)
+  }
+
   return (
     <div className={styles.panelContainer}>
       <button 
         className={styles.toggleButton}
         onClick={() => setIsOpen(!isOpen)}
+        title={isOpen ? 'Hide panel' : 'Show panel'}
       >
-        {isOpen ? '▼' : '▲'} Debug
+        {isOpen ? '▼' : '▲'}
       </button>
       
       {isOpen && (
         <div className={styles.panel}>
+          {tooltip && (
+            <div 
+              className={styles.tooltip}
+              style={{
+                left: `${tooltip.x}px`,
+                top: `${tooltip.y}px`,
+              }}
+            >
+              {tooltip.text}
+            </div>
+          )}
           <div className={styles.info}>
             <strong>Stars:</strong> {starCount} / {config.maxStars}
           </div>
@@ -93,119 +123,76 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
             </div>
           )}
 
-          {/* Debug Stats Overlay - Always reserve space to prevent layout shift */}
-          <div className={styles.debugStatsContainer}>
-            {debugStats && (
-              <div className={styles.debugStats} style={{ backgroundColor: 'rgba(0, 0, 0, 0.3)', padding: '8px', borderRadius: '4px', marginBottom: '12px' }}>
-                <h3 style={{ marginTop: 0, fontSize: '12px' }}>Launch Stats</h3>
-                <div className={styles.debugStatsContent}>
-                  <div className={styles.debugStatRow}>
-                    <span>Hold Drag:</span>
-                    <span className={styles.debugStatValue}>{debugStats.holdDragSpeed.toFixed(1)} px/s</span>
-                  </div>
-                  <div className={styles.debugStatRow}>
-                    <span>Release Flick:</span>
-                    <span className={styles.debugStatValue}>{debugStats.releaseFlickSpeed.toFixed(1)} px/s</span>
-                  </div>
-                  <div className={styles.debugStatRow}>
-                    <span>Compressed:</span>
-                    <span className={styles.debugStatValue}>{debugStats.compressedSpeed.toFixed(1)} px/s</span>
-                  </div>
-                  <div className={styles.debugStatRow}>
-                    <span>Final Launch (actual):</span>
-                    <span className={styles.debugStatValue}>{debugStats.finalLaunchSpeed.toFixed(1)} px/s</span>
-                  </div>
-                  {debugStats.estimatedVCirc > 0 && (
-                    <>
-                      <div className={styles.debugStatRow}>
-                        <span>v_circ:</span>
-                        <span className={styles.debugStatValue}>{debugStats.estimatedVCirc.toFixed(1)} px/s</span>
-                      </div>
-                      <div className={styles.debugStatRow}>
-                        <span>v_esc:</span>
-                        <span className={styles.debugStatValue}>{debugStats.estimatedVEsc.toFixed(1)} px/s</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
+          <div className={styles.section}>
+            <h3>Controls</h3>
+            <div className={styles.controlsRow}>
+              {onSaveState && (
+                <button
+                  onClick={onSaveState}
+                  className={styles.controlButton}
+                  style={{
+                    backgroundColor: 'rgba(50, 150, 50, 0.3)',
+                    color: 'white',
+                    border: '1px solid rgba(50, 150, 50, 0.5)'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(50, 150, 50, 0.5)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(50, 150, 50, 0.3)'}
+                >
+                  💾 Save
+                </button>
+              )}
+              {onClearStars && (
+                <button
+                  onClick={onClearStars}
+                  className={styles.controlButton}
+                  style={{
+                    backgroundColor: '#ff4444',
+                    color: 'white'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#ff6666'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ff4444'}
+                >
+                  Clear ({starCount})
+                </button>
+              )}
+            </div>
           </div>
 
           <div className={styles.section}>
             <h3>
-              Controls
-              <span className={styles.helpBadge} title="Clear All Stars: Removes all stars from the simulation. Reset to Defaults: Restores all settings to default values.">
-                ?
-              </span>
-            </h3>
-            {onClearStars && (
-              <button
-                onClick={onClearStars}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  marginBottom: '12px',
-                  backgroundColor: '#ff4444',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 'bold'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#ff6666'}
-                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ff4444'}
+              Orbit Factor
+              <span 
+                className={styles.helpBadge}
+                onMouseEnter={(e) => handleHelpMouseEnter(e, "Multiplier for initial orbital velocity (0.7-1.3, 1.0 = circular orbit)")}
+                onMouseLeave={handleHelpMouseLeave}
               >
-                Clear All Stars ({starCount})
-              </button>
-            )}
-          </div>
-
-          <div className={styles.section}>
-            <h3>
-              Physics Mode
-              <span className={styles.helpBadge} title="ORBIT_PLAYGROUND: Full pairwise gravity with energy-conserving integrator. Stable orbits, no damping/clamping. N_BODY_CHAOS: Same physics but with optional damping and speed clamping for gameplay.">
                 ?
               </span>
             </h3>
             <label>
-              Mode:
-              <select
-                value={localConfig.physicsMode}
-                onChange={(e) => updateConfig('physicsMode', e.target.value as any)}
-              >
-                <option value="ORBIT_PLAYGROUND">Orbit Playground</option>
-                <option value="N_BODY_CHAOS">N-Body Chaos</option>
-              </select>
+              Orbit Factor: {localConfig.orbitFactor.toFixed(2)}
+              <div className={styles.info} style={{ fontSize: '9px', marginTop: '2px' }}>
+                Multiplier for initial orbital velocity (0.7-1.3, 1.0 = circular)
+              </div>
+              <input
+                type="range"
+                min="0.7"
+                max="1.3"
+                step="0.05"
+                value={localConfig.orbitFactor}
+                onChange={(e) => updateConfig('orbitFactor', parseFloat(e.target.value))}
+              />
             </label>
-            {localConfig.physicsMode === 'ORBIT_PLAYGROUND' && (
-              <>
-                <div className={styles.info} style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)', marginTop: '4px' }}>
-                  Satellites attract each other: <strong>Disabled</strong> (enforced in ORBIT_PLAYGROUND)
-                </div>
-                <label>
-                  Orbit Factor: {localConfig.orbitFactor.toFixed(2)}
-                  <div className={styles.info} style={{ fontSize: '9px', marginTop: '2px' }}>
-                    Multiplier for initial orbital velocity (0.7-1.3, 1.0 = circular)
-                  </div>
-                  <input
-                    type="range"
-                    min="0.7"
-                    max="1.3"
-                    step="0.05"
-                    value={localConfig.orbitFactor}
-                    onChange={(e) => updateConfig('orbitFactor', parseFloat(e.target.value))}
-                  />
-                </label>
-              </>
-            )}
           </div>
 
           <div className={styles.section}>
             <h3>
               Core Physics
-              <span className={styles.helpBadge} title="Launch Strength: Multiplier for final launch velocity. Mass Resistance: Reduces launch speed for larger stars (0 = no resistance, 1 = full resistance). Gravity Constant: G in F = G*m1*m2/r². Velocity Damping: Energy loss per frame (0 = energy-conserving, >0 = gradual slowdown).">
+              <span 
+                className={styles.helpBadge}
+                onMouseEnter={(e) => handleHelpMouseEnter(e, "Launch Strength: Multiplier for final launch velocity. Mass Resistance: Reduces launch speed for larger stars (0 = no resistance, 1 = full resistance). Gravity Constant: G in F = G*m1*m2/r². Velocity Damping: Energy loss per frame (0 = energy-conserving, >0 = gradual slowdown).")}
+                onMouseLeave={handleHelpMouseLeave}
+              >
                 ?
               </span>
             </h3>
@@ -264,7 +251,11 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
           <div className={styles.section}>
             <h3>
               Gravity Softening
-              <span className={styles.helpBadge} title="Plummer Softening: Prevents infinite forces at r=0 by using r² = dx² + dy² + eps². Larger eps = smoother forces but less accurate. Max Force: Clamps acceleration to prevent numerical explosions (0 = disabled, breaks energy conservation).">
+              <span 
+                className={styles.helpBadge}
+                onMouseEnter={(e) => handleHelpMouseEnter(e, "Plummer Softening: Prevents infinite forces at r=0 by using r² = dx² + dy² + eps². Larger eps = smoother forces but less accurate. Max Force: Clamps acceleration to prevent numerical explosions (0 = disabled, breaks energy conservation).")}
+                onMouseLeave={handleHelpMouseLeave}
+              >
                 ?
               </span>
             </h3>
@@ -300,16 +291,17 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
 
           <div className={styles.section}>
             <h3>
-              Launch Velocity (Flick)
-              <span className={styles.helpBadge} title="Flick Window: Time window to measure cursor speed before release. Flick S0: Speed compressor scale - lower = more compression. Flick Vmax: Maximum compressed speed - allows natural hand movements to produce reasonable velocities.">
+              Launch Velocity
+              <span 
+                className={styles.helpBadge}
+                onMouseEnter={(e) => handleHelpMouseEnter(e, "Window: Time window to measure cursor speed. S0: Speed compressor scale. Vmax: Maximum compressed speed.")}
+                onMouseLeave={handleHelpMouseLeave}
+              >
                 ?
               </span>
             </h3>
             <label>
-              Flick Window: {localConfig.flickWindowMs} ms
-              <div className={styles.info} style={{ fontSize: '9px', marginTop: '2px' }}>
-                Time window to measure flick speed before release
-              </div>
+              Window: {localConfig.flickWindowMs}ms
               <input
                 type="range"
                 min="30"
@@ -320,10 +312,7 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
               />
             </label>
             <label>
-              Flick S0: {localConfig.flickS0}
-              <div className={styles.info} style={{ fontSize: '9px', marginTop: '2px' }}>
-                Speed compressor scale parameter (px/s)
-              </div>
+              S0: {localConfig.flickS0}
               <input
                 type="range"
                 min="100"
@@ -334,10 +323,7 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
               />
             </label>
             <label>
-              Flick Vmax: {localConfig.flickVmax}
-              <div className={styles.info} style={{ fontSize: '9px', marginTop: '2px' }}>
-                Maximum compressed speed (px/s) - allows natural interaction speeds
-              </div>
+              Vmax: {localConfig.flickVmax}
               <input
                 type="range"
                 min="200"
@@ -352,7 +338,11 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
           <div className={styles.section}>
             <h3>
               Mass Growth
-              <span className={styles.helpBadge} title="Hold to Max: Time to hold mouse/touch to reach maximum mass. Min/Max Mass: Mass range for created stars. Radius Scale: Multiplier for radius calculation. Radius Power: Exponent in radius = mass^power × scale (0.5 = 2D area scaling, 0.333 = 3D volume scaling).">
+              <span 
+                className={styles.helpBadge}
+                onMouseEnter={(e) => handleHelpMouseEnter(e, "Hold to Max: Time to hold mouse/touch to reach maximum mass. Min/Max Mass: Mass range for created stars. Radius Scale: Multiplier for radius calculation. Radius Power: Exponent in radius = mass^power × scale (0.5 = 2D area scaling, 0.333 = 3D volume scaling).")}
+                onMouseLeave={handleHelpMouseLeave}
+              >
                 ?
               </span>
             </h3>
@@ -422,7 +412,11 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
           <div className={styles.section}>
             <h3>
               Angular Guidance (Launch Assist Only)
-              <span className={styles.helpBadge} title="Guidance Strength: Rotates launch velocity toward tangential direction (0 = no guidance, 1 = pure tangential). Preserves energy and angular momentum. Radial Clamp: Reduces excessive radial velocity at launch. Search Radius: Distance to search for nearest massive star to compute orbital center.">
+              <span 
+                className={styles.helpBadge}
+                onMouseEnter={(e) => handleHelpMouseEnter(e, "Guidance Strength: Rotates launch velocity toward tangential direction (0 = no guidance, 1 = pure tangential). Preserves energy and angular momentum. Radial Clamp: Reduces excessive radial velocity at launch. Search Radius: Distance to search for nearest massive star to compute orbital center.")}
+                onMouseLeave={handleHelpMouseLeave}
+              >
                 ?
               </span>
             </h3>
@@ -470,7 +464,11 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
           <div className={styles.section}>
             <h3>
               Visual
-              <span className={styles.helpBadge} title="Glow Radius Multiplier: Controls star glow size (glow = baseGlow + mass × multiplier). Opacity Multiplier: Controls star opacity (opacity = mass × multiplier, clamped 0-1).">
+              <span 
+                className={styles.helpBadge}
+                onMouseEnter={(e) => handleHelpMouseEnter(e, "Glow Radius Multiplier: Controls star glow size (glow = baseGlow + mass × multiplier). Opacity Multiplier: Controls star opacity (opacity = mass × multiplier, clamped 0-1).")}
+                onMouseLeave={handleHelpMouseLeave}
+              >
                 ?
               </span>
             </h3>
@@ -507,7 +505,11 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
           <div className={styles.section}>
             <h3>
               Merging
-              <span className={styles.helpBadge} title="Inelastic collision: When stars touch, they merge into one. Momentum is conserved, but energy is lost (non-Hamiltonian). For physics validation, disable merging.">
+              <span 
+                className={styles.helpBadge}
+                onMouseEnter={(e) => handleHelpMouseEnter(e, "Inelastic collision: When stars touch, they merge into one. Momentum is conserved, but energy is lost (non-Hamiltonian). For physics validation, disable merging.")}
+                onMouseLeave={handleHelpMouseLeave}
+              >
                 ?
               </span>
             </h3>
