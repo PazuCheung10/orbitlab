@@ -25,7 +25,7 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
   const [savedStates, setSavedStates] = useState<SavedState[]>([])
   const previewRefs = useRef<Array<HTMLCanvasElement | null>>([])
   const simulationRefs = useRef<Array<GravitySimulation | null>>([])
-  const animationFrameRefs = useRef<Array<number | null>>([])
+  const animationFrameRef = useRef<number | null>(null)
 
   // Load saved states from localStorage
   useEffect(() => {
@@ -44,7 +44,6 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
   useEffect(() => {
     previewRefs.current = []
     simulationRefs.current = []
-    animationFrameRefs.current = []
     
     // Use fixed canvas size like the original working version
     const canvasWidth = 160
@@ -125,91 +124,79 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
       })
     })
     
-    // Animation loop - simplified like original, but with visibility improvements
+    // Animation loop - safe handling of missing refs
     const animate = () => {
-      UNIVERSE_PRESETS.forEach((preset, index) => {
+      UNIVERSE_PRESETS.forEach((_, index) => {
         const sim = simulationRefs.current[index]
         const canvas = previewRefs.current[index]
         
-        // Debug: Log what's missing
-        if (!sim) {
-          console.warn(`Preview ${index}: Simulation is null`)
-          return
-        }
-        if (!canvas) {
-          console.warn(`Preview ${index}: Canvas is null`)
-          return
+        // Skip this frame if refs not ready (they'll be available next frame)
+        if (!sim || !canvas) return
+        
+        // Ensure canvas has correct size
+        if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
+          canvas.width = canvasWidth
+          canvas.height = canvasHeight
         }
         
-        if (sim && canvas) {
-          // Ensure canvas has correct size (should be set by JSX, but double-check)
-          if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
-            canvas.width = canvasWidth
-            canvas.height = canvasHeight
-          }
+        sim.update(0.016) // ~60fps - physics update (DO NOT MODIFY)
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        
+        // Clear and draw background
+        ctx.fillStyle = '#000000'
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight)
+        
+        // Render stars
+        sim.stars.forEach((star) => {
+          // Guard positions against NaN/undefined
+          const x = Number.isFinite(star.x) ? star.x : 0
+          const y = Number.isFinite(star.y) ? star.y : 0
           
-          sim.update(0.016) // ~60fps - physics update (DO NOT MODIFY)
-          const ctx = canvas.getContext('2d')
-          if (ctx) {
-            ctx.fillStyle = '#000000' // Darker background for better contrast
-            ctx.fillRect(0, 0, canvasWidth, canvasHeight)
-            
-            // Debug: Log star count and positions
-            if (index === 0) {
-              console.log(`Preview ${index}: ${sim.stars.length} stars`, {
-                stars: sim.stars.map(s => ({ x: s.x, y: s.y, mass: s.mass, radius: s.radius, vx: s.vx, vy: s.vy })),
-                canvasSize: { width: canvas.width, height: canvas.height }
-              })
-            }
-            
-            // Bulletproof preview star rendering - guard against NaN/undefined
-            sim.stars.forEach((star) => {
-              // Guard positions against NaN/undefined
-              const x = Number.isFinite(star.x) ? star.x : 0
-              const y = Number.isFinite(star.y) ? star.y : 0
-              
-              // Guard radius against NaN/undefined
-              const baseRadius = Number.isFinite(star.radius) ? star.radius : 1
-              const r = Math.max(2, baseRadius * 1.5)
-              
-              // Boost star brightness with stronger glow for contrast
-              ctx.fillStyle = '#ffffff'
-              ctx.shadowBlur = 6
-              ctx.shadowColor = 'rgba(255, 255, 255, 0.9)'
-              
-              ctx.beginPath()
-              ctx.arc(x, y, r, 0, Math.PI * 2)
-              ctx.fill()
-            })
-            
-            // Reset shadow after stars
-            ctx.shadowBlur = 0
-            
-            // Render central sun if it exists (with guards)
-            if (sim.centralSun) {
-              const sunX = Number.isFinite(sim.centralSun.x) ? sim.centralSun.x : canvasWidth / 2
-              const sunY = Number.isFinite(sim.centralSun.y) ? sim.centralSun.y : canvasHeight / 2
-              const baseSunRadius = Number.isFinite(sim.centralSun.radius) ? sim.centralSun.radius : 2
-              const sunRadius = Math.max(3, baseSunRadius * 1.5)
-              
-              ctx.fillStyle = '#ffff00'
-              ctx.beginPath()
-              ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2)
-              ctx.fill()
-            }
-          }
+          // Guard radius against NaN/undefined
+          const baseRadius = Number.isFinite(star.radius) ? star.radius : 1
+          const r = Math.max(2, baseRadius * 1.5)
+          
+          // Boost star brightness with stronger glow for contrast
+          ctx.fillStyle = '#ffffff'
+          ctx.shadowBlur = 6
+          ctx.shadowColor = 'rgba(255, 255, 255, 0.9)'
+          
+          ctx.beginPath()
+          ctx.arc(x, y, r, 0, Math.PI * 2)
+          ctx.fill()
+        })
+        
+        // Reset shadow after stars
+        ctx.shadowBlur = 0
+        
+        // Render central sun if it exists
+        if (sim.centralSun) {
+          const sunX = Number.isFinite(sim.centralSun.x) ? sim.centralSun.x : canvasWidth / 2
+          const sunY = Number.isFinite(sim.centralSun.y) ? sim.centralSun.y : canvasHeight / 2
+          const baseSunRadius = Number.isFinite(sim.centralSun.radius) ? sim.centralSun.radius : 2
+          const sunRadius = Math.max(3, baseSunRadius * 1.5)
+          
+          ctx.fillStyle = '#ffff00'
+          ctx.beginPath()
+          ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2)
+          ctx.fill()
         }
       })
-      animationFrameRefs.current[0] = requestAnimationFrame(animate)
+      
+      animationFrameRef.current = requestAnimationFrame(animate)
     }
-    animate()
+    
+    // Defer animation start until next frame to ensure refs are ready
+    requestAnimationFrame(() => {
+      animate()
+    })
     
     return () => {
-      animationFrameRefs.current.forEach((frameId) => {
-        if (frameId !== null) {
-          cancelAnimationFrame(frameId)
-        }
-      })
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = null
+      }
     }
   }, [currentConfig])
 
