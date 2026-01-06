@@ -40,6 +40,10 @@ export class GravitySystem {
     this.renderer.updateConfig(this.config)
   }
 
+  loadUniverse(universe: { width: number; height: number; stars: Array<{ x: number; y: number; mass: number }> }): void {
+    this.simulation.loadUniverse(universe)
+  }
+
   getConfig(): GravityConfig {
     return { ...this.config }
   }

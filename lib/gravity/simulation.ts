@@ -1,4 +1,4 @@
-import { GravityConfig } from './config'
+import { GravityConfig, PhysicsMode } from './config'
 import { Star } from './star'
 
 // Vector math helpers for angular momentum guidance
@@ -132,6 +132,7 @@ export class GravitySimulation {
   config: GravityConfig
   width: number
   height: number
+  centralSun: Star | null = null // Central sun for ORBIT_PLAYGROUND mode
   
   // Star creation state
   isCreating: boolean = false
@@ -157,10 +158,95 @@ export class GravitySimulation {
     this.width = width
     this.height = height
     this.config = config
+    this.initializePhysicsMode()
+  }
+
+  /**
+   * Initialize physics mode (create central sun if needed)
+   */
+  initializePhysicsMode(): void {
+    // No central sun - all stars interact with each other
+    this.centralSun = null
+  }
+
+  /**
+   * Load stars from universe JSON (positions only, compute velocities)
+   */
+  loadUniverse(universe: { width: number; height: number; stars: Array<{ x: number; y: number; mass: number }> }): void {
+    this.stars = []
+    
+    const centerX = universe.width / 2
+    const centerY = universe.height / 2
+    
+    for (const starData of universe.stars) {
+      // Calculate distance from center
+      const dx = starData.x - centerX
+      const dy = starData.y - centerY
+      const r = Math.sqrt(dx * dx + dy * dy)
+      
+      if (r < 1e-6) continue // Skip if at center
+      
+      // Compute orbital velocity: v_circ = sqrt(G * M_center / r)
+      // NO mass-dependent scaling - circular orbit speed depends ONLY on (G * M / r)
+      // Use center of mass approximation for initial velocity
+      const centerMass = this.computeCenterOfMassMass()
+      
+      const vCirc = Math.sqrt((this.config.gravityConstant * centerMass) / r)
+      
+      // Velocity magnitude = v_circ * orbitFactor (no mass scaling)
+      const v = vCirc * this.config.orbitFactor
+      
+      // Velocity direction = perpendicular to radius (tangential)
+      // Small random deviation allowed: ±10% max for subtle variation
+      const angle = Math.atan2(dy, dx)
+      const tangentialAngle = angle + Math.PI / 2 // Perpendicular to radius (tangential)
+      const randomDeviation = (Math.random() - 0.5) * 0.1 // ±10% (0.1 radians ≈ ±5.7 degrees)
+      const finalAngle = tangentialAngle + randomDeviation
+      
+      const vx = Math.cos(finalAngle) * v
+      const vy = Math.sin(finalAngle) * v
+      
+      const star = new Star(
+        starData.x,
+        starData.y,
+        starData.mass,
+        vx,
+        vy,
+        this.config.radiusScale,
+        this.config.radiusPower
+      )
+      this.stars.push(star)
+    }
+    
+    // Reinitialize physics mode to ensure sun exists
+    this.initializePhysicsMode()
+  }
+
+  /**
+   * Compute total mass at center (for N_BODY mode, approximate center of mass)
+   */
+  private computeCenterOfMassMass(): number {
+    // For N_BODY mode, use average mass as approximation
+    if (this.stars.length === 0) return 100
+    const totalMass = this.stars.reduce((sum, s) => sum + s.mass, 0)
+    return totalMass / this.stars.length * 10 // Rough approximation
   }
 
   updateConfig(config: GravityConfig): void {
+    const oldMode = this.config.physicsMode
     this.config = config
+    
+    // Enforce ORBIT_PLAYGROUND rules
+    if (config.physicsMode === PhysicsMode.ORBIT_PLAYGROUND) {
+      // Disable force clamping
+      this.config.maxForceMagnitude = 0
+      // Ensure no velocity damping
+      this.config.velocityDamping = 0
+    }
+    
+    if (oldMode !== config.physicsMode) {
+      this.initializePhysicsMode()
+    }
   }
 
   resize(width: number, height: number): void {
@@ -229,12 +315,18 @@ export class GravitySimulation {
     const now = performance.now() / 1000
     const holdDuration = now - this.creationStartTime
     
+    // Get current scene's largest star mass (rounded to integer), or use default if no stars exist
+    const currentMaxMass = this.stars.length > 0
+      ? Math.floor(Math.max(...this.stars.map(s => s.mass)))
+      : this.config.maxMass
+    
     // Calculate mass based on hold time (mass is the primary property)
     // Use eased growth: t = clamp(holdDuration / holdToMaxSeconds, 0..1)
     const t = Math.min(1, holdDuration / this.config.holdToMaxSeconds)
-    // Use sqrt easing for smoother feel
-    const eased = Math.sqrt(t)
-    const mass = this.config.minMass + (this.config.maxMass - this.config.minMass) * eased
+    // Use power curve that grows faster initially (easier to make massive stars)
+    // x^0.7 grows faster than sqrt, making it easier to reach higher masses
+    const eased = Math.pow(t, 0.7)
+    const mass = this.config.minMass + (currentMaxMass - this.config.minMass) * eased
     
     // Radius will be automatically calculated as mass^radiusPower * radiusScale
     
@@ -264,9 +356,18 @@ export class GravitySimulation {
         }
         
         if (totalDt > 0) {
-          const rawVx = (totalDx / (flickHistory.length - 1))
-          const rawVy = (totalDy / (flickHistory.length - 1))
-          const rawSpeed = Math.sqrt(rawVx * rawVx + rawVy * rawVy)
+          let rawVx = (totalDx / (flickHistory.length - 1))
+          let rawVy = (totalDy / (flickHistory.length - 1))
+          let rawSpeed = Math.sqrt(rawVx * rawVx + rawVy * rawVy)
+          
+          // Clamp release speed to 550px/s max for good behavior across all universes
+          const MAX_RELEASE_SPEED = 550
+          if (rawSpeed > MAX_RELEASE_SPEED) {
+            const scale = MAX_RELEASE_SPEED / rawSpeed
+            rawSpeed = MAX_RELEASE_SPEED
+            rawVx *= scale
+            rawVy *= scale
+          }
           
           releaseFlickSpeed = rawSpeed
           
@@ -284,7 +385,8 @@ export class GravitySimulation {
     }
     
     // Apply mass resistance (larger stars launch slower)
-    const massResistance = 1 - (mass / this.config.maxMass) * this.config.massResistanceFactor
+    // Reuse currentMaxMass calculated above
+    const massResistance = 1 - (mass / currentMaxMass) * this.config.massResistanceFactor
     vx *= massResistance
     vy *= massResistance
     
@@ -308,8 +410,19 @@ export class GravitySimulation {
           // Decompose velocity
           const { radial, tangential } = decomposeVelocity(position, orbitalCenter.center, velocity)
           
-          // Clamp excessive radial component
-          const radialClamped = scale(radial, 1 - this.config.radialClampFactor)
+          // Only clamp OUTWARD radial velocity (moving away), not INWARD (moving toward)
+          // This prevents repulsion when creating stars close to others
+          const rUnit = normalize(r)
+          const radialMagnitude = dot(velocity, rUnit) // Positive = outward, negative = inward
+          let radialClamped: Vector2
+          
+          if (radialMagnitude > 0) {
+            // Outward: clamp it to reduce escape
+            radialClamped = scale(radial, 1 - this.config.radialClampFactor)
+          } else {
+            // Inward: don't clamp, allow natural attraction
+            radialClamped = radial
+          }
           
           // Calculate desired tangential speed for circular orbit
           const vCirc = Math.sqrt((this.config.gravityConstant * orbitalCenter.totalMass) / rLen)
@@ -398,8 +511,9 @@ export class GravitySimulation {
   }
 
   update(deltaTime: number): void {
-    // Clamp deltaTime to prevent spikes
-    const dt = Math.min(deltaTime, 0.1) // Max 100ms per frame
+    // Clamp deltaTime for numerical stability (dt ≤ 0.01s for ORBIT_PLAYGROUND)
+    const maxDt = this.config.physicsMode === PhysicsMode.ORBIT_PLAYGROUND ? 0.01 : 0.1
+    const dt = Math.min(deltaTime, maxDt)
     
     // Update ripples
     const now = performance.now() / 1000
@@ -417,38 +531,62 @@ export class GravitySimulation {
       let ax = 0
       let ay = 0
       
-      // Compute gravitational forces from all other stars
-      for (let j = 0; j < this.stars.length; j++) {
-        if (i === j) continue
-        
-        const starB = this.stars[j]
-        
-        // Calculate distance vector
-        const dx = starB.x - starA.x
-        const dy = starB.y - starA.y
-        
-        // Plummer softening: r² = dx² + dy² + eps²
-        const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
-        const invR = 1 / Math.sqrt(r2)
-        const invR3 = invR * invR * invR
-        
-        // Force: F = G * m1 * m2 * invR³ * (dx, dy)
-        const forceMagnitude = this.config.gravityConstant * starA.mass * starB.mass * invR3
-        
-        // Force direction (unit vector from A to B)
-        const fx = dx * forceMagnitude
-        const fy = dy * forceMagnitude
-        
-        // Clamp force magnitude if configured
-        const forceLen = Math.sqrt(fx * fx + fy * fy)
-        if (this.config.maxForceMagnitude > 0 && forceLen > this.config.maxForceMagnitude) {
-          const scale = this.config.maxForceMagnitude / forceLen
-          ax += (fx / starA.mass) * scale
-          ay += (fy / starA.mass) * scale
-        } else {
-          // Acceleration = F / m
+      if (this.config.physicsMode === PhysicsMode.ORBIT_PLAYGROUND) {
+        // ORBIT_PLAYGROUND: Full pairwise gravity (no central sun)
+        // All stars attract each other
+        for (let j = 0; j < this.stars.length; j++) {
+          if (i === j) continue
+          const starB = this.stars[j]
+          
+          const dx = starB.x - starA.x
+          const dy = starB.y - starA.y
+          const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
+          const invR = 1 / Math.sqrt(r2)
+          const invR3 = invR * invR * invR
+          const forceMagnitude = this.config.gravityConstant * starA.mass * starB.mass * invR3
+          const fx = dx * forceMagnitude
+          const fy = dy * forceMagnitude
+          
+          // NO force clamping in ORBIT_PLAYGROUND - allow natural orbital forces
           ax += fx / starA.mass
           ay += fy / starA.mass
+        }
+      } else {
+        // N_BODY_CHAOS: Full pairwise gravity
+        for (let j = 0; j < this.stars.length; j++) {
+          if (i === j) continue
+          
+          const starB = this.stars[j]
+          
+          // Calculate distance vector (ALWAYS use direct distance for force calculation)
+          const dx = starB.x - starA.x
+          const dy = starB.y - starA.y
+          
+          // Plummer softening: r² = dx² + dy² + eps²
+          const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
+          const invR = 1 / Math.sqrt(r2)
+          const invR3 = invR * invR * invR
+          
+          // Force: F = G * m1 * m2 * invR³ * (dx, dy)
+          const forceMagnitude = this.config.gravityConstant * starA.mass * starB.mass * invR3
+          const fx = dx * forceMagnitude
+          const fy = dy * forceMagnitude
+          
+          // Clamp force magnitude (scale relative to base force at softening distance)
+          const forceLen = Math.sqrt(fx * fx + fy * fy)
+          const baseForceScale = (this.config.gravityConstant * starA.mass * starB.mass) / (this.config.softeningEpsPx * this.config.softeningEpsPx)
+          const maxForce = this.config.maxForceMagnitude > 0 
+            ? Math.max(this.config.maxForceMagnitude, baseForceScale * 0.1) 
+            : baseForceScale * 10
+          
+          if (maxForce > 0 && forceLen > maxForce) {
+            const scale = maxForce / forceLen
+            ax += (fx / starA.mass) * scale
+            ay += (fy / starA.mass) * scale
+          } else {
+            ax += fx / starA.mass
+            ay += fy / starA.mass
+          }
         }
       }
       
@@ -464,32 +602,62 @@ export class GravitySimulation {
       let ax = 0
       let ay = 0
       
-      // Recompute forces at new positions
-      for (let j = 0; j < this.stars.length; j++) {
-        if (i === j) continue
-        
-        const starB = this.stars[j]
-        
-        const dx = starB.x - starA.x
-        const dy = starB.y - starA.y
-        
-        const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
-        const invR = 1 / Math.sqrt(r2)
-        const invR3 = invR * invR * invR
-        
-        const forceMagnitude = this.config.gravityConstant * starA.mass * starB.mass * invR3
-        
-        const fx = dx * forceMagnitude
-        const fy = dy * forceMagnitude
-        
-        const forceLen = Math.sqrt(fx * fx + fy * fy)
-        if (this.config.maxForceMagnitude > 0 && forceLen > this.config.maxForceMagnitude) {
-          const scale = this.config.maxForceMagnitude / forceLen
-          ax += (fx / starA.mass) * scale
-          ay += (fy / starA.mass) * scale
-        } else {
+      if (this.config.physicsMode === PhysicsMode.ORBIT_PLAYGROUND) {
+        // ORBIT_PLAYGROUND: Full pairwise gravity (no central sun)
+        // All stars attract each other
+        for (let j = 0; j < this.stars.length; j++) {
+          if (i === j) continue
+          const starB = this.stars[j]
+          
+          const dx = starB.x - starA.x
+          const dy = starB.y - starA.y
+          const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
+          const invR = 1 / Math.sqrt(r2)
+          const invR3 = invR * invR * invR
+          const forceMagnitude = this.config.gravityConstant * starA.mass * starB.mass * invR3
+          const fx = dx * forceMagnitude
+          const fy = dy * forceMagnitude
+          
+          // NO force clamping in ORBIT_PLAYGROUND - allow natural orbital forces
           ax += fx / starA.mass
           ay += fy / starA.mass
+        }
+      } else {
+        // N_BODY_CHAOS: Full pairwise gravity
+        for (let j = 0; j < this.stars.length; j++) {
+          if (i === j) continue
+          
+          const starB = this.stars[j]
+          
+          // Calculate distance vector (ALWAYS use direct distance for force calculation)
+          const dx = starB.x - starA.x
+          const dy = starB.y - starA.y
+          
+          // Plummer softening: r² = dx² + dy² + eps²
+          const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
+          const invR = 1 / Math.sqrt(r2)
+          const invR3 = invR * invR * invR
+          
+          // Force: F = G * m1 * m2 * invR³ * (dx, dy)
+          const forceMagnitude = this.config.gravityConstant * starA.mass * starB.mass * invR3
+          const fx = dx * forceMagnitude
+          const fy = dy * forceMagnitude
+          
+          // Clamp force magnitude (scale relative to base force at softening distance)
+          const forceLen = Math.sqrt(fx * fx + fy * fy)
+          const baseForceScale = (this.config.gravityConstant * starA.mass * starB.mass) / (this.config.softeningEpsPx * this.config.softeningEpsPx)
+          const maxForce = this.config.maxForceMagnitude > 0 
+            ? Math.max(this.config.maxForceMagnitude, baseForceScale * 0.1) 
+            : baseForceScale * 10
+          
+          if (maxForce > 0 && forceLen > maxForce) {
+            const scale = maxForce / forceLen
+            ax += (fx / starA.mass) * scale
+            ay += (fy / starA.mass) * scale
+          } else {
+            ax += fx / starA.mass
+            ay += fy / starA.mass
+          }
         }
       }
       
@@ -509,10 +677,11 @@ export class GravitySimulation {
           if (toRemove.has(j)) continue
           
           const distance = this.stars[i].distanceTo(this.stars[j])
-          // Merge when smaller star is inside larger star: distance < r2 - r1 (where r2 > r1)
+          // Merge when smaller star is inside larger star: distance < (r2 - r1) / 2 (where r2 > r1)
+          // Merge distance is now 1/2 of the previous value
           const r1 = Math.min(this.stars[i].radius, this.stars[j].radius)
           const r2 = Math.max(this.stars[i].radius, this.stars[j].radius)
-          const mergeDistance = r2 - r1
+          const mergeDistance = (r2 - r1) * 0.5 // Half of previous merge distance
           if (distance < mergeDistance) {
             // Merge stars
             const mergedStar = this.stars[i].mergeWith(this.stars[j])
@@ -541,13 +710,19 @@ export class GravitySimulation {
     const now = performance.now() / 1000
     const holdDuration = now - this.creationStartTime
     
+    // Get current scene's largest star mass (rounded to integer), or use default if no stars exist
+    const currentMaxMass = this.stars.length > 0
+      ? Math.floor(Math.max(...this.stars.map(s => s.mass)))
+      : this.config.maxMass
+    
     // Calculate mass based on hold time
     const t = Math.min(1, holdDuration / this.config.holdToMaxSeconds)
-    const eased = Math.sqrt(t)
-    const mass = this.config.minMass + (this.config.maxMass - this.config.minMass) * eased
+    // Use power curve that grows faster initially (easier to make massive stars)
+    const eased = Math.pow(t, 0.7)
+    const mass = this.config.minMass + (currentMaxMass - this.config.minMass) * eased
     
-    // Radius is derived from mass
-    const radius = Math.pow(mass, this.config.radiusPower) * this.config.radiusScale
+    // Radius is derived from mass (final radius is half of calculated value)
+    const radius = (Math.pow(mass, this.config.radiusPower) * this.config.radiusScale) / 2
     
     return {
       x: this.creationX,

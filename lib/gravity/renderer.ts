@@ -49,9 +49,14 @@ export class GravityRenderer {
   }
 
   render(simulation: GravitySimulation, cursorX: number, cursorY: number): void {
-    // Clear canvas
+    // Clear canvas FIRST
     this.ctx.fillStyle = '#0a0a0a'
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
+    
+    // Draw central sun if in ORBIT_PLAYGROUND mode (after clearing)
+    if (simulation.centralSun) {
+      this.drawStar(simulation.centralSun)
+    }
 
     // Draw star trails (behind stars)
     for (const star of simulation.stars) {
@@ -82,13 +87,16 @@ export class GravityRenderer {
   }
 
   private drawStar(star: Star): void {
-    // Glow radius scales with mass: glowRadius = mass * k
-    const glowRadius = star.mass * this.config.glowRadiusMultiplier
+    // Glow radius scales with mass (purely visual, doesn't affect physics)
+    // Base glow + mass-dependent scaling (linear)
+    const baseGlow = star.radius * 1.5 // Start from physical radius
+    const massGlow = star.mass * this.config.glowRadiusMultiplier // Linear scaling with mass
+    const glowRadius = baseGlow + massGlow
     
     // Opacity scales with mass: opacity = mass * opacityMultiplier (clamped 0-1)
     const opacity = Math.min(1.0, star.mass * this.config.opacityMultiplier)
 
-    // Glow effect
+    // Draw glow (purely visual, larger for more massive stars)
     const gradient = this.ctx.createRadialGradient(
       star.x, star.y, 0,
       star.x, star.y, glowRadius
@@ -102,7 +110,8 @@ export class GravityRenderer {
     this.ctx.arc(star.x, star.y, glowRadius, 0, Math.PI * 2)
     this.ctx.fill()
 
-    // Star core
+    // Star core (physical radius - used for collision/merging)
+    // This is the actual star.radius, not the glow radius
     this.ctx.globalAlpha = opacity
     this.ctx.fillStyle = '#ffffff'
     this.ctx.beginPath()
@@ -152,24 +161,27 @@ export class GravityRenderer {
     const pulse = 1 + Math.sin(performance.now() / 100) * 0.1
     let radius = state.radius * pulse
     
-    // Calculate mass from radius (reverse of radius = mass^radiusPower * radiusScale)
-    // mass = (radius / radiusScale)^(1/radiusPower)
+    // Calculate mass from radius (reverse of radius = (mass^radiusPower * radiusScale) / 2)
+    // mass = ((radius * 2) / radiusScale)^(1/radiusPower)
     const radiusPower = this.config.radiusPower || 0.5
-    const mass = Math.pow(radius / this.config.radiusScale, 1 / radiusPower)
+    const mass = Math.pow((radius * 2) / this.config.radiusScale, 1 / radiusPower)
     
-    // Glow radius scales with mass (same as regular stars): glowRadius = mass * k
-    const glowRadius = mass * this.config.glowRadiusMultiplier
+    // Glow radius scales with mass (purely visual)
+    // Base glow + mass-dependent scaling (linear)
+    const baseGlow = radius * 1.5 // Start from physical radius
+    const massGlow = mass * this.config.glowRadiusMultiplier // Linear scaling with mass
+    const glowRadius = baseGlow + massGlow
     
     // Opacity scales with mass (same as regular stars): opacity = mass * opacityMultiplier
     const opacity = Math.min(1.0, mass * this.config.opacityMultiplier)
 
-    // Glow
+    // Draw glow (purely visual)
     const gradient = this.ctx.createRadialGradient(
       state.x, state.y, 0,
       state.x, state.y, glowRadius
     )
     gradient.addColorStop(0, `rgba(255, 255, 255, ${opacity})`)
-    gradient.addColorStop(0.5, `rgba(255, 255, 255, ${opacity * 0.5})`)
+    gradient.addColorStop(0.5, `rgba(255, 255, 255, ${opacity * 0.4})`)
     gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
 
     this.ctx.fillStyle = gradient
@@ -177,7 +189,7 @@ export class GravityRenderer {
     this.ctx.arc(state.x, state.y, glowRadius, 0, Math.PI * 2)
     this.ctx.fill()
 
-    // Core
+    // Star core (physical radius - used for collision/merging)
     this.ctx.globalAlpha = opacity
     this.ctx.fillStyle = '#ffffff'
     this.ctx.beginPath()

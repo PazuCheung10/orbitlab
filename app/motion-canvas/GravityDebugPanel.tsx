@@ -87,6 +87,52 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, d
           </div>
 
           <div className={styles.section}>
+            <h3>Physics Mode</h3>
+            <label>
+              Mode:
+              <select
+                value={localConfig.physicsMode}
+                onChange={(e) => updateConfig('physicsMode', e.target.value as any)}
+              >
+                <option value="ORBIT_PLAYGROUND">Orbit Playground</option>
+                <option value="N_BODY_CHAOS">N-Body Chaos</option>
+              </select>
+            </label>
+            {localConfig.physicsMode === 'ORBIT_PLAYGROUND' && (
+              <>
+                <label>
+                  Sun Mass: {localConfig.sunMass.toFixed(1)}
+                  <input
+                    type="range"
+                    min="50"
+                    max="500"
+                    step="10"
+                    value={localConfig.sunMass}
+                    onChange={(e) => updateConfig('sunMass', parseFloat(e.target.value))}
+                  />
+                </label>
+                <div className={styles.info} style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)', marginTop: '4px' }}>
+                  Satellites attract each other: <strong>Disabled</strong> (enforced in ORBIT_PLAYGROUND)
+                </div>
+                <label>
+                  Orbit Factor: {localConfig.orbitFactor.toFixed(2)}
+                  <div className={styles.info} style={{ fontSize: '9px', marginTop: '2px' }}>
+                    Multiplier for initial orbital velocity (0.7-1.3, 1.0 = circular)
+                  </div>
+                  <input
+                    type="range"
+                    min="0.7"
+                    max="1.3"
+                    step="0.05"
+                    value={localConfig.orbitFactor}
+                    onChange={(e) => updateConfig('orbitFactor', parseFloat(e.target.value))}
+                  />
+                </label>
+              </>
+            )}
+          </div>
+
+          <div className={styles.section}>
             <h3>Core Physics</h3>
             <label>
               Launch Strength: {localConfig.launchStrength.toFixed(2)}
@@ -329,15 +375,15 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, d
           <div className={styles.section}>
             <h3>Visual</h3>
             <label>
-              Glow Radius (k): {localConfig.glowRadiusMultiplier.toFixed(2)}
+              Glow Radius Multiplier: {localConfig.glowRadiusMultiplier.toFixed(3)}
               <div className={styles.info} style={{ fontSize: '9px', marginTop: '2px' }}>
-                glow = mass × k
+                Controls glow size: glow = baseGlow + mass^1.2 × multiplier
               </div>
               <input
                 type="range"
-                min="0.5"
-                max="10"
-                step="0.1"
+                min="0"
+                max="0.5"
+                step="0.01"
                 value={localConfig.glowRadiusMultiplier}
                 onChange={(e) => updateConfig('glowRadiusMultiplier', parseFloat(e.target.value))}
               />
@@ -345,13 +391,13 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, d
             <label>
               Opacity Multiplier: {localConfig.opacityMultiplier.toFixed(3)}
               <div className={styles.info} style={{ fontSize: '9px', marginTop: '2px' }}>
-                opacity = mass × multiplier (clamped 0-1)
+                Controls star opacity: opacity = mass × multiplier (clamped 0-1)
               </div>
               <input
                 type="range"
-                min="0.01"
-                max="0.2"
-                step="0.005"
+                min="0"
+                max="0.1"
+                step="0.001"
                 value={localConfig.opacityMultiplier}
                 onChange={(e) => updateConfig('opacityMultiplier', parseFloat(e.target.value))}
               />

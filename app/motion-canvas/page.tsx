@@ -4,13 +4,46 @@ import { useEffect, useRef, useState } from 'react'
 import { GravitySystem } from '@/lib/gravity/gravity'
 import { GRAVITY_CONFIG, GravityConfig } from '@/lib/gravity/config'
 import GravityDebugPanel from './GravityDebugPanel'
+import UniverseBrowser from './UniverseBrowser'
+// @ts-ignore - JSON import
+import initialUniverseData from '@/initial-universe.json'
+const initialUniverse = initialUniverseData as { width: number; height: number; stars: Array<{ x: number; y: number; mass: number }> }
 import styles from './page.module.css'
 
 export default function MotionCanvasPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const systemRef = useRef<GravitySystem | null>(null)
   const titleRef = useRef<HTMLDivElement>(null)
-  const [config, setConfig] = useState<GravityConfig>(GRAVITY_CONFIG)
+  // Check for loaded genome from Evolution Lab
+  const loadConfigFromStorage = (): GravityConfig => {
+    try {
+      // Check URL params first (for new window)
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search)
+        const configKey = params.get('config')
+        if (configKey) {
+          const stored = localStorage.getItem(configKey)
+          if (stored) {
+            const parsed = JSON.parse(stored)
+            localStorage.removeItem(configKey) // Clear after loading
+            return { ...GRAVITY_CONFIG, ...parsed }
+          }
+        }
+        // Fallback to old method
+        const stored = localStorage.getItem('gravityConfig')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          localStorage.removeItem('gravityConfig') // Clear after loading
+          return { ...GRAVITY_CONFIG, ...parsed }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load config from storage:', e)
+    }
+    return GRAVITY_CONFIG
+  }
+  
+  const [config, setConfig] = useState<GravityConfig>(loadConfigFromStorage())
   const [starCount, setStarCount] = useState(0)
   const [debugStats, setDebugStats] = useState<{
     holdDragSpeed: number
@@ -62,14 +95,34 @@ export default function MotionCanvasPage() {
     }
   }, []) // Only initialize once
 
+  // Track previous physics mode to detect mode changes
+  const prevPhysicsModeRef = useRef(config.physicsMode)
+  
   // Update config when it changes
   useEffect(() => {
     if (systemRef.current) {
       systemRef.current.updateConfig(config)
+      
+      // Only reload universe if physics mode changed (not for every config change)
+      if (prevPhysicsModeRef.current !== config.physicsMode) {
+        systemRef.current.loadUniverse(initialUniverse)
+        prevPhysicsModeRef.current = config.physicsMode
+      }
     }
   }, [config])
+  
+  // Load initial universe
+  useEffect(() => {
+    if (systemRef.current) {
+      systemRef.current.loadUniverse(initialUniverse)
+    }
+  }, [])
 
   const handleConfigChange = (newConfig: GravityConfig) => {
+    setConfig(newConfig)
+  }
+
+  const handleLoadUniverse = (newConfig: GravityConfig) => {
     setConfig(newConfig)
   }
 
@@ -79,6 +132,10 @@ export default function MotionCanvasPage() {
       <div ref={titleRef} className={styles.title}>
         Gravity Stars
       </div>
+      <UniverseBrowser
+        onLoadUniverse={handleLoadUniverse}
+        currentConfig={config}
+      />
       <GravityDebugPanel
         config={config}
         onConfigChange={handleConfigChange}

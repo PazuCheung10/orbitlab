@@ -28,6 +28,9 @@ export class Star {
     this.y = y
     this.vx = vx
     this.vy = vy
+    // Initialize half-step velocity for Leapfrog
+    // For proper Leapfrog, v_half should be v - a*dt/2, but at creation we don't have acceleration yet
+    // So we start with v_half = v, and the first kick will correct it
     this.vxHalf = vx
     this.vyHalf = vy
     this.mass = mass
@@ -37,10 +40,11 @@ export class Star {
     this.creationTime = performance.now() / 1000
   }
 
-  // Radius is derived from mass: radius = mass^radiusPower * radiusScale
+  // Radius is derived from mass: radius = (mass^radiusPower * radiusScale) / 2
   // radiusPower = 0.5 for 2D (area ∝ r²), 0.333 for 3D (volume ∝ r³)
+  // Final radius is half of the calculated value
   get radius(): number {
-    return Math.pow(this.mass, this._radiusPower) * this._radiusScale
+    return (Math.pow(this.mass, this._radiusPower) * this._radiusScale) / 2
   }
 
   // Leapfrog integrator: kick-drift-kick
@@ -60,11 +64,24 @@ export class Star {
       this.vyHalf *= (1 - config.velocityDamping)
     }
     
-    // Boundary wrap
-    if (this.x < 0) this.x = width
-    if (this.x > width) this.x = 0
-    if (this.y < 0) this.y = height
-    if (this.y > height) this.y = 0
+    // Limit max speed to 1000 px/s (natural speed, not release speed)
+    // NOTE: This can cause energy loss if stars hit the limit during close encounters
+    // Consider increasing limit or removing for stable orbits
+    const currentSpeed = Math.sqrt(this.vxHalf * this.vxHalf + this.vyHalf * this.vyHalf)
+    if (currentSpeed > 1000) {
+      const scale = 1000 / currentSpeed
+      this.vxHalf *= scale
+      this.vyHalf *= scale
+    }
+    
+    // Periodic boundary conditions
+    // WARNING: Boundary wrapping breaks energy conservation in orbital mechanics
+    // For stable orbits, consider disabling wrapping or using larger invisible bounds
+    // Current implementation wraps position but this causes energy loss
+    while (this.x < 0) this.x += width
+    while (this.x >= width) this.x -= width
+    while (this.y < 0) this.y += height
+    while (this.y >= height) this.y -= height
     
     // Update age
     this.age += deltaTime
@@ -98,6 +115,14 @@ export class Star {
     // KICK 2: v = v_half + a_new * (dt/2)
     this.vxHalf += ax * (deltaTime / 2)
     this.vyHalf += ay * (deltaTime / 2)
+    
+    // Limit max speed to 1000 px/s (natural speed, not release speed)
+    const finalSpeed = Math.sqrt(this.vxHalf * this.vxHalf + this.vyHalf * this.vyHalf)
+    if (finalSpeed > 1000) {
+      const scale = 1000 / finalSpeed
+      this.vxHalf *= scale
+      this.vyHalf *= scale
+    }
     
     // Sync full velocity
     this.vx = this.vxHalf
