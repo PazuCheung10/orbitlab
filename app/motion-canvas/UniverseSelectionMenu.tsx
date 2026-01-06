@@ -60,50 +60,68 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
       simulationRefs.current[index] = sim
       
       // Dedicated preview universe - simple, obvious orbits for thumbnails
-      // This is a caricature, not a scaled-down real universe
+      // Note: loadUniverse skips stars at exact center (r < 1e-6), so we offset the central mass slightly
+      const centerX = canvasWidth / 2
+      const centerY = canvasHeight / 2
+      
       sim.loadUniverse({
         width: canvasWidth,
         height: canvasHeight,
         stars: [
           {
-            x: canvasWidth / 2,
-            y: canvasHeight / 2,
+            // Central mass - offset slightly so it's not skipped by loadUniverse
+            x: centerX + 0.1,
+            y: centerY + 0.1,
             mass: 200
           },
           {
-            x: canvasWidth / 2 + 30,
-            y: canvasHeight / 2,
+            x: centerX + 30,
+            y: centerY,
             mass: 5
           },
           {
-            x: canvasWidth / 2,
-            y: canvasHeight / 2 + 45,
+            x: centerX,
+            y: centerY + 45,
             mass: 8
           },
           {
-            x: canvasWidth / 2 - 35,
-            y: canvasHeight / 2,
+            x: centerX - 35,
+            y: centerY,
             mass: 6
           },
           {
-            x: canvasWidth / 2,
-            y: canvasHeight / 2 - 40,
+            x: centerX,
+            y: centerY - 40,
             mass: 7
           }
         ]
       })
       
-      // Manually kick velocities for visible orbits (preview-only, doesn't affect physics correctness)
+      // After loadUniverse, manually adjust velocities for visible orbits (preview-only)
+      // loadUniverse calculates velocities, but we override for better visibility
       sim.stars.forEach((star, i) => {
-        if (i === 0) return // Skip central mass
-        // Give each star a visible orbital velocity
-        const angle = (i - 1) * (Math.PI * 2 / (sim.stars.length - 1))
-        const speed = 20 + (i * 3) // Vary speeds for visual interest
-        star.vx = Math.cos(angle + Math.PI / 2) * speed
-        star.vy = Math.sin(angle + Math.PI / 2) * speed
-        // Sync half-step velocities
-        star.vxHalf = star.vx
-        star.vyHalf = star.vy
+        // Find the central mass (largest mass, closest to center)
+        const isCentral = star.mass > 100
+        if (isCentral) {
+          // Keep central mass at center with no velocity
+          star.x = centerX
+          star.y = centerY
+          star.vx = 0
+          star.vy = 0
+          star.vxHalf = 0
+          star.vyHalf = 0
+        } else {
+          // Give orbiting stars visible orbital velocities
+          const dx = star.x - centerX
+          const dy = star.y - centerY
+          const angle = Math.atan2(dy, dx)
+          const speed = 25 + (i * 2) // Vary speeds for visual interest
+          // Perpendicular velocity for circular orbit
+          star.vx = -Math.sin(angle) * speed
+          star.vy = Math.cos(angle) * speed
+          star.vxHalf = star.vx
+          star.vyHalf = star.vy
+        }
       })
     })
     
@@ -112,6 +130,17 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
       UNIVERSE_PRESETS.forEach((preset, index) => {
         const sim = simulationRefs.current[index]
         const canvas = previewRefs.current[index]
+        
+        // Debug: Log what's missing
+        if (!sim) {
+          console.warn(`Preview ${index}: Simulation is null`)
+          return
+        }
+        if (!canvas) {
+          console.warn(`Preview ${index}: Canvas is null`)
+          return
+        }
+        
         if (sim && canvas) {
           // Ensure canvas has correct size (should be set by JSX, but double-check)
           if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
@@ -124,6 +153,14 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
           if (ctx) {
             ctx.fillStyle = '#000000' // Darker background for better contrast
             ctx.fillRect(0, 0, canvasWidth, canvasHeight)
+            
+            // Debug: Log star count and positions
+            if (index === 0) {
+              console.log(`Preview ${index}: ${sim.stars.length} stars`, {
+                stars: sim.stars.map(s => ({ x: s.x, y: s.y, mass: s.mass, radius: s.radius, vx: s.vx, vy: s.vy })),
+                canvasSize: { width: canvas.width, height: canvas.height }
+              })
+            }
             
             // Bulletproof preview star rendering - guard against NaN/undefined
             sim.stars.forEach((star) => {
