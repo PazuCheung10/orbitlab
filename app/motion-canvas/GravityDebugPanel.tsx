@@ -263,7 +263,7 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
               />
             </label>
             <label>
-              Potential Energy Degree: {localConfig.potentialEnergyDegree}
+              Potential Energy Degree: {localConfig.potentialEnergyDegree.toFixed(1)}
               <div className={styles.info} style={{ fontSize: '9px', marginTop: '2px' }}>
                 Power law: U = -G*m1*m2 / r^(degree-1), F = G*m1*m2*(degree-1) / r^degree
               </div>
@@ -271,9 +271,9 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
                 type="range"
                 min="1"
                 max="3"
-                step="1"
+                step="0.1"
                 value={localConfig.potentialEnergyDegree}
-                onChange={(e) => updateConfig('potentialEnergyDegree', parseInt(e.target.value))}
+                onChange={(e) => updateConfig('potentialEnergyDegree', parseFloat(e.target.value))}
               />
             </label>
           </div>
