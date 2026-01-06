@@ -624,12 +624,10 @@ export class GravitySimulation {
         const invR = 1 / r
         const invR3 = invR * invR * invR
         
-        const forceMagnitude = this.config.gravityConstant * starA.mass * starB.mass * invR3
-        const fx = dx * forceMagnitude
-        const fy = dy * forceMagnitude
-        
-        ax += fx / starA.mass
-        ay += fy / starA.mass
+        // Direct acceleration: a = G * mB * r / r^3 = G * mB / r^2 in direction of r
+        const s = this.config.gravityConstant * starB.mass * invR3
+        ax += dx * s
+        ay += dy * s
       }
       
       accelerations.push({ ax, ay })
@@ -656,14 +654,12 @@ export class GravitySimulation {
         const r2 = dx * dx + dy * dy + this.config.softeningEpsPx * this.config.softeningEpsPx
         const r = Math.sqrt(r2)
         const invR = 1 / r
-        const invR2 = invR * invR
+        const invR3 = invR * invR * invR
         
-        const forceMagnitude = this.config.gravityConstant * starA.mass * starB.mass * invR2
-        const fx = dx * forceMagnitude
-        const fy = dy * forceMagnitude
-        
-        ax += fx / starA.mass
-        ay += fy / starA.mass
+        // Direct acceleration: a = G * mB * r / r^3 = G * mB / r^2 in direction of r
+        const s = this.config.gravityConstant * starB.mass * invR3
+        ax += dx * s
+        ay += dy * s
       }
       
       starA.updateVelocityVerletSecondHalf(dt, ax, ay, this.config)
