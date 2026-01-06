@@ -17,7 +17,6 @@ export class GravitySystem {
     this.canvas = canvas
     this.config = { ...config }
     
-    // Initialize components
     const width = window.innerWidth
     const height = window.innerHeight
     
@@ -26,11 +25,9 @@ export class GravitySystem {
     this.renderer.resize(width, height)
     this.interaction = new GravityInteraction(canvas, this.simulation)
     
-    // Handle resize
     this.handleResize()
     window.addEventListener('resize', () => this.handleResize())
     
-    // Start animation loop
     this.start()
   }
 
@@ -73,14 +70,11 @@ export class GravitySystem {
     const deltaTime = Math.min((currentTime - this.lastTime) / 1000, 0.1) // Cap at 100ms
     this.lastTime = currentTime
 
-    // Update simulation
     this.simulation.update(deltaTime)
 
-    // Update cursor trail
     const cursorPos = this.interaction.getCursorPosition()
     this.renderer.updateCursorTrail(cursorPos.x, cursorPos.y)
 
-    // Render
     this.renderer.render(this.simulation, cursorPos.x, cursorPos.y)
 
     this.animationFrameId = requestAnimationFrame(this.animate)

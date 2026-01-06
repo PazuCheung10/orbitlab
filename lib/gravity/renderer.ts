@@ -49,11 +49,10 @@ export class GravityRenderer {
   }
 
   render(simulation: GravitySimulation, cursorX: number, cursorY: number): void {
-    // Clear canvas FIRST
+    // Clear background
     this.ctx.fillStyle = '#0a0a0a'
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
     
-    // Draw central sun if in ORBIT_PLAYGROUND mode (after clearing)
     if (simulation.centralSun) {
       this.drawStar(simulation.centralSun)
     }
@@ -87,20 +86,15 @@ export class GravityRenderer {
   }
 
   private drawStar(star: Star): void {
-    // Glow radius scales with mass (purely visual, doesn't affect physics)
-    // Base glow + mass-dependent scaling (linear)
-    // Cancel radiusScale factor (divide by radiusScale, but skip if radiusScale = 1.0)
-    const baseGlow = star.radius * 1.5 // Start from physical radius
+    // Glow size based on mass - bigger stars glow more
+    const baseGlow = star.radius * 1.5
     const glowMultiplier = this.config.radiusScale !== 1.0 
       ? this.config.glowRadiusMultiplier / this.config.radiusScale 
       : this.config.glowRadiusMultiplier
-    const massGlow = star.mass * glowMultiplier // Linear scaling with mass
+    const massGlow = star.mass * glowMultiplier
     const glowRadius = baseGlow + massGlow
     
-    // Opacity scales with mass: opacity = mass * opacityMultiplier (clamped 0-1)
     const opacity = Math.min(1.0, star.mass * this.config.opacityMultiplier)
-
-    // Draw glow (purely visual, larger for more massive stars)
     const gradient = this.ctx.createRadialGradient(
       star.x, star.y, 0,
       star.x, star.y, glowRadius
@@ -114,8 +108,7 @@ export class GravityRenderer {
     this.ctx.arc(star.x, star.y, glowRadius, 0, Math.PI * 2)
     this.ctx.fill()
 
-    // Star core (physical radius - used for collision/merging)
-    // This is the actual star.radius, not the glow radius
+    // Actual star (this is what collides)
     this.ctx.globalAlpha = opacity
     this.ctx.fillStyle = '#ffffff'
     this.ctx.beginPath()
@@ -147,7 +140,7 @@ export class GravityRenderer {
       }
     }
 
-    // Draw with gradient
+    // Fade from start to end
     const gradient = this.ctx.createLinearGradient(
       trail[0].x, trail[0].y,
       trail[trail.length - 1].x, trail[trail.length - 1].y
@@ -169,29 +162,20 @@ export class GravityRenderer {
     vCirc?: number
     vEsc?: number
   }, cursorX: number, cursorY: number): void {
-    // Draw growing star with subtle pulse (only when actively creating)
-    // Remove pulse to prevent continuous shaking/shining after creation
     const radius = state.radius
     
-    // Calculate mass from radius (reverse of radius = (mass^radiusPower * radiusScale) / 2)
-    // mass = ((radius * 2) / radiusScale)^(1/radiusPower)
+    // Reverse the radius calculation to get mass for glow
     const radiusPower = this.config.radiusPower || 0.5
     const mass = Math.pow((radius * 2) / this.config.radiusScale, 1 / radiusPower)
     
-    // Glow radius scales with mass (purely visual)
-    // Base glow + mass-dependent scaling (linear)
-    // Cancel radiusScale factor (divide by radiusScale, but skip if radiusScale = 1.0)
-    const baseGlow = radius * 1.5 // Start from physical radius
+    const baseGlow = radius * 1.5
     const glowMultiplier = this.config.radiusScale !== 1.0 
       ? this.config.glowRadiusMultiplier / this.config.radiusScale 
       : this.config.glowRadiusMultiplier
-    const massGlow = mass * glowMultiplier // Linear scaling with mass
+    const massGlow = mass * glowMultiplier
     const glowRadius = baseGlow + massGlow
     
-    // Opacity scales with mass (same as regular stars): opacity = mass * opacityMultiplier
     const opacity = Math.min(1.0, mass * this.config.opacityMultiplier)
-
-    // Draw glow (purely visual)
     const gradient = this.ctx.createRadialGradient(
       state.x, state.y, 0,
       state.x, state.y, glowRadius
@@ -205,7 +189,6 @@ export class GravityRenderer {
     this.ctx.arc(state.x, state.y, glowRadius, 0, Math.PI * 2)
     this.ctx.fill()
 
-    // Star core (physical radius - used for collision/merging)
     this.ctx.globalAlpha = opacity
     this.ctx.fillStyle = '#ffffff'
     this.ctx.beginPath()
@@ -213,7 +196,7 @@ export class GravityRenderer {
     this.ctx.fill()
     this.ctx.globalAlpha = 1.0
 
-    // Show launch direction hint if cursor has moved
+    // Show launch direction arrow
     if (this.cursorTrail.length > 1) {
       const lastPoint = this.cursorTrail[this.cursorTrail.length - 1]
       const prevPoint = this.cursorTrail[this.cursorTrail.length - 2]
@@ -222,8 +205,7 @@ export class GravityRenderer {
       const dist = Math.sqrt(dx * dx + dy * dy)
       
       if (dist > 2) {
-        // Draw direction indicator with velocity preview
-        const dirLen = Math.min(50, state.estimatedVelocity * 0.1) // Scale preview
+        const dirLen = Math.min(50, state.estimatedVelocity * 0.1)
         this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'
         this.ctx.lineWidth = 2
         this.ctx.beginPath()
@@ -231,7 +213,7 @@ export class GravityRenderer {
         this.ctx.lineTo(state.x + (dx / dist) * dirLen, state.y + (dy / dist) * dirLen)
         this.ctx.stroke()
         
-        // Draw arrowhead
+        // Arrowhead
         const arrowLen = 8
         const angle = Math.atan2(dy, dx)
         this.ctx.beginPath()
@@ -255,7 +237,7 @@ export class GravityRenderer {
       }
     }
     
-    // Draw real-time feedback text
+    // Debug info
     this.ctx.save()
     this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
     this.ctx.font = '12px monospace'
@@ -275,13 +257,13 @@ export class GravityRenderer {
       this.ctx.fillText(`Velocity: ${state.estimatedVelocity.toFixed(1)} px/s`, state.x + radius + 10, currentY)
       currentY += lineHeight
       
-      // Orbital parameters if available
+      // Orbital speeds
       if (state.vCirc !== undefined) {
         const ratio = state.estimatedVelocity / state.vCirc
         let color = 'rgba(255, 255, 255, 0.9)'
-        if (ratio < 0.8) color = 'rgba(255, 200, 0, 0.9)' // Too slow (yellow)
-        else if (ratio > 1.2) color = 'rgba(255, 100, 100, 0.9)' // Too fast (red)
-        else color = 'rgba(100, 255, 100, 0.9)' // Good (green)
+        if (ratio < 0.8) color = 'rgba(255, 200, 0, 0.9)' // Too slow
+        else if (ratio > 1.2) color = 'rgba(255, 100, 100, 0.9)' // Too fast
+        else color = 'rgba(100, 255, 100, 0.9)' // Good
         
         this.ctx.fillStyle = color
         this.ctx.fillText(`v_circ: ${state.vCirc.toFixed(1)} px/s`, state.x + radius + 10, currentY)
@@ -291,7 +273,6 @@ export class GravityRenderer {
           this.ctx.fillText(`v_esc: ${state.vEsc.toFixed(1)} px/s`, state.x + radius + 10, currentY)
           currentY += lineHeight
           
-          // Show ratio
           this.ctx.fillStyle = 'rgba(200, 200, 255, 0.9)'
           this.ctx.fillText(`Ratio: ${ratio.toFixed(2)}x`, state.x + radius + 10, currentY)
         }
@@ -317,9 +298,8 @@ export class GravityRenderer {
   }
 
   private drawCometCursor(x: number, y: number): void {
-    if (x < 0 || y < 0) return // Cursor not initialized
+    if (x < 0 || y < 0) return
 
-    // Draw tail (with exponential fade)
     if (this.cursorTrail.length > 1) {
       this.ctx.strokeStyle = '#ffffff'
       this.ctx.lineWidth = 2
@@ -342,7 +322,7 @@ export class GravityRenderer {
       this.ctx.stroke()
     }
 
-    // Draw comet head (glowing dot)
+    // Cursor head
     const headGradient = this.ctx.createRadialGradient(
       x, y, 0,
       x, y, this.config.cometHeadGlow
@@ -356,7 +336,6 @@ export class GravityRenderer {
     this.ctx.arc(x, y, this.config.cometHeadGlow, 0, Math.PI * 2)
     this.ctx.fill()
 
-    // Comet core
     this.ctx.globalAlpha = 1.0
     this.ctx.fillStyle = '#ffffff'
     this.ctx.beginPath()

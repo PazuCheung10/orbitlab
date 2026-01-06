@@ -14,7 +14,7 @@ export class GravityInteraction {
   }
 
   private setupEventListeners(): void {
-    // Track cursor globally (not just on canvas) so it's always visible
+    // Track cursor everywhere so it's always visible
     window.addEventListener('mousemove', (e) => {
       const rect = this.canvas.getBoundingClientRect()
       const x = e.clientX - rect.left
@@ -23,7 +23,6 @@ export class GravityInteraction {
       this.cursorY = y
     })
 
-    // Pointer down (start creation)
     this.canvas.addEventListener('pointerdown', (e) => {
       e.preventDefault()
       const rect = this.canvas.getBoundingClientRect()
@@ -35,7 +34,6 @@ export class GravityInteraction {
       this.simulation.startCreation(x, y)
     })
 
-    // Pointer move (update creation or cursor)
     this.canvas.addEventListener('pointermove', (e) => {
       const rect = this.canvas.getBoundingClientRect()
       const x = e.clientX - rect.left
@@ -45,12 +43,10 @@ export class GravityInteraction {
       
 
       if (this.isPointerDown) {
-        // Update creation position
         this.simulation.updateCreation(x, y)
       }
     })
 
-    // Pointer up (finish creation)
     this.canvas.addEventListener('pointerup', (e) => {
       e.preventDefault()
       if (this.isPointerDown) {
@@ -59,7 +55,6 @@ export class GravityInteraction {
       }
     })
 
-    // Pointer cancel (cancel creation)
     this.canvas.addEventListener('pointercancel', (e) => {
       e.preventDefault()
       if (this.isPointerDown) {
@@ -68,7 +63,6 @@ export class GravityInteraction {
       }
     })
 
-    // Mouse leave (cancel creation if dragging)
     this.canvas.addEventListener('mouseleave', () => {
       if (this.isPointerDown) {
         this.simulation.cancelCreation()
@@ -76,7 +70,7 @@ export class GravityInteraction {
       }
     })
 
-    // Touch events (for mobile)
+    // Touch support
     this.canvas.addEventListener('touchstart', (e) => {
       e.preventDefault()
       const rect = this.canvas.getBoundingClientRect()
@@ -121,7 +115,7 @@ export class GravityInteraction {
   }
 
   destroy(): void {
-    // Event listeners will be cleaned up when canvas is removed
+    // Cleanup handled by browser when canvas is removed
   }
 }
 
