@@ -57,20 +57,33 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
         ...currentConfig,
         ...preset.config,
         
-        // Preview-only stability overrides
+        // Preview-only stability overrides (keep these to prevent collapse)
         enableMerging: false,
         enableBoundaryWrapping: false,
-        gravityConstant: 4000,
-        softeningEpsPx: 3,
+        // Don't override gravityConstant or softeningEpsPx - let presets show their differences
       }
       
       const sim = new GravitySimulation(canvasWidth, canvasHeight, config)
       simulationRefs.current[index] = sim
       
-      // Dedicated preview universe - simple, obvious orbits for thumbnails
-      // Note: loadUniverse skips stars at exact center (r < 1e-6), so we offset the central mass slightly
+      // Dedicated preview universe - vary based on preset to show differences
       const centerX = canvasWidth / 2
       const centerY = canvasHeight / 2
+      
+      // Adjust preview universe based on preset type to show visual differences
+      let centralMass = 200
+      let starDistances = [30, 45, 35, 40]
+      
+      if (preset.name === 'Tight Orbits') {
+        centralMass = 300
+        starDistances = [20, 30, 25, 28] // Closer orbits
+      } else if (preset.name === 'Wide Orbits') {
+        centralMass = 150
+        starDistances = [40, 55, 45, 50] // Farther orbits
+      } else if (preset.name === 'N-Body Chaos') {
+        centralMass = 200
+        starDistances = [25, 35, 30, 32] // Different arrangement for chaos
+      }
       
       sim.loadUniverse({
         width: canvasWidth,
@@ -80,26 +93,26 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
             // Central mass - offset slightly so it's not skipped by loadUniverse
             x: centerX + 0.1,
             y: centerY + 0.1,
-            mass: 200
+            mass: centralMass
           },
           {
-            x: centerX + 30,
+            x: centerX + starDistances[0],
             y: centerY,
             mass: 5
           },
           {
             x: centerX,
-            y: centerY + 45,
+            y: centerY + starDistances[1],
             mass: 8
           },
           {
-            x: centerX - 35,
+            x: centerX - starDistances[2],
             y: centerY,
             mass: 6
           },
           {
             x: centerX,
-            y: centerY - 40,
+            y: centerY - starDistances[3],
             mass: 7
           }
         ]
