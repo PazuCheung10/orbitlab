@@ -102,10 +102,10 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
               const baseRadius = Number.isFinite(star.radius) ? star.radius : 1
               const r = Math.max(2, baseRadius * 1.5)
               
-              // Fixed high alpha for visibility (not based on mass)
-              ctx.shadowBlur = 2
-              ctx.shadowColor = 'rgba(255, 255, 255, 0.6)'
-              ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
+              // Boost star brightness with stronger glow for contrast
+              ctx.fillStyle = '#ffffff'
+              ctx.shadowBlur = 6
+              ctx.shadowColor = 'rgba(255, 255, 255, 0.9)'
               
               ctx.beginPath()
               ctx.arc(x, y, r, 0, Math.PI * 2)
