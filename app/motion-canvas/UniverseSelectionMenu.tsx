@@ -80,32 +80,54 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
         const canvas = previewRefs.current[index]
         if (sim && canvas) {
           const { width, height } = getCanvasSize()
-          if (canvas.width !== width || canvas.height !== height) {
-            canvas.width = width
-            canvas.height = height
-            sim.resize(width, height)
+          const dpr = window.devicePixelRatio || 1
+          
+          // Handle devicePixelRatio for Retina/mobile screens
+          if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+            canvas.width = width * dpr
+            canvas.height = height * dpr
+            canvas.style.width = `${width}px`
+            canvas.style.height = `${height}px`
+            sim.resize(width, height) // Simulation uses logical size
           }
           
-          sim.update(0.016) // ~60fps
+          sim.update(0.016) // ~60fps - physics update (DO NOT MODIFY)
           const ctx = canvas.getContext('2d')
           if (ctx) {
-            ctx.fillStyle = '#0a0a0a'
-            ctx.fillRect(0, 0, canvas.width, canvas.height)
-            // Simple star rendering for preview - use the working approach from before
+            // Scale context for devicePixelRatio
+            ctx.setTransform(1, 0, 0, 1, 0, 0) // Reset transform
+            ctx.scale(dpr, dpr)
+            
+            // Darker background for better contrast
+            ctx.fillStyle = '#000000'
+            ctx.fillRect(0, 0, width, height)
+            
+            // Preview-only rendering with exaggerated visibility
             sim.stars.forEach(star => {
-              // Ensure minimum visible radius (especially important for mobile)
-              const displayRadius = Math.max(1, star.radius)
-              ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(star.mass / 50, 1)})`
+              // Force minimum visible radius for thumbnails (preview-only, doesn't affect physics)
+              const displayRadius = Math.max(2, star.radius * 1.5)
+              
+              // Fixed high alpha for visibility (not based on mass)
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+              
+              // Optional: subtle glow for better visibility
+              ctx.shadowBlur = 2
+              ctx.shadowColor = 'rgba(255, 255, 255, 0.5)'
+              
               ctx.beginPath()
               ctx.arc(star.x, star.y, displayRadius, 0, Math.PI * 2)
               ctx.fill()
+              
+              // Reset shadow
+              ctx.shadowBlur = 0
             })
             
-            // Render central sun if it exists
+            // Render central sun if it exists (with exaggerated size for preview)
             if (sim.centralSun) {
+              const sunRadius = Math.max(3, sim.centralSun.radius * 1.5)
               ctx.fillStyle = '#ffff00'
               ctx.beginPath()
-              ctx.arc(sim.centralSun.x, sim.centralSun.y, sim.centralSun.radius, 0, Math.PI * 2)
+              ctx.arc(sim.centralSun.x, sim.centralSun.y, sunRadius, 0, Math.PI * 2)
               ctx.fill()
             }
           }
@@ -165,8 +187,13 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
                       if (el) {
                         previewRefs.current[index] = el
                         const isMobile = window.innerWidth <= 768
-                        el.width = isMobile ? 80 : 160
-                        el.height = isMobile ? 60 : 120
+                        const width = isMobile ? 80 : 160
+                        const height = isMobile ? 60 : 120
+                        const dpr = window.devicePixelRatio || 1
+                        el.width = width * dpr
+                        el.height = height * dpr
+                        el.style.width = `${width}px`
+                        el.style.height = `${height}px`
                       }
                     }}
                   />
