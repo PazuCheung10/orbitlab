@@ -67,6 +67,7 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
           if (!sim || sim.width !== cssW || sim.height !== cssH) {
             const presetConfig = getPresetConfig(preset)
             const baseGravityConstant = (presetConfig.gravityConstant ?? currentConfig.gravityConstant)
+            const mode = (presetConfig.physicsMode ?? currentConfig.physicsMode)
             const baseMinMass = (presetConfig.minMass ?? currentConfig.minMass)
             const baseMaxMass = (presetConfig.maxMass ?? currentConfig.maxMass)
             const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
@@ -78,7 +79,8 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
               ...currentConfig,
               ...presetConfig,
               // keep previews lively + visible
-              enableMerging: true,
+              // N-body chaos thumbnails collapse into one huge center star quickly; keep it readable
+              enableMerging: mode !== PhysicsMode.N_BODY_CHAOS,
               enableBoundaryWrapping: true,
               enableOrbitTrails: false,
               gravityConstant: baseGravityConstant * 0.2,
@@ -186,6 +188,7 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
       const preset = UNIVERSE_PRESETS[index]
       const presetConfig = getPresetConfig(preset)
       const baseGravityConstant = (presetConfig.gravityConstant ?? currentConfig.gravityConstant)
+      const mode = (presetConfig.physicsMode ?? currentConfig.physicsMode)
       const baseMinMass = (presetConfig.minMass ?? currentConfig.minMass)
       const baseMaxMass = (presetConfig.maxMass ?? currentConfig.maxMass)
       const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
@@ -196,7 +199,8 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
       const config: GravityConfig = {
         ...currentConfig,
         ...presetConfig,
-        enableMerging: true,
+        // N-body chaos thumbnails collapse into one huge center star quickly; keep it readable
+        enableMerging: mode !== PhysicsMode.N_BODY_CHAOS,
         enableBoundaryWrapping: true,
         enableOrbitTrails: false,
         gravityConstant: baseGravityConstant * 0.2,

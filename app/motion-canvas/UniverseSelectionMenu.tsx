@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { GravityConfig } from '@/lib/gravity/config'
+import { GravityConfig, PhysicsMode } from '@/lib/gravity/config'
 import { generateProceduralUniverse, getPresetConfig, UNIVERSE_PRESETS } from '@/lib/gravity/universe-presets'
 import { GravitySimulation } from '@/lib/gravity/simulation'
 import styles from './UniverseSelectionMenu.module.css'
@@ -27,6 +27,7 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
 
   const buildPreviewConfig = (presetConfig: Partial<GravityConfig>): GravityConfig => {
     const baseGravityConstant = (presetConfig.gravityConstant ?? currentConfig.gravityConstant)
+    const mode = (presetConfig.physicsMode ?? currentConfig.physicsMode)
     const baseMinMass = (presetConfig.minMass ?? currentConfig.minMass)
     const baseMaxMass = (presetConfig.maxMass ?? currentConfig.maxMass)
     // In thumbnails: reduce max mass by 1/3 so huge stars don't dominate the preview
@@ -41,7 +42,8 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
       ...presetConfig,
 
       // Preview-only stability overrides
-      enableMerging: true,
+      // N-body chaos thumbnails collapse into one huge center star quickly; keep it readable
+      enableMerging: mode !== PhysicsMode.N_BODY_CHAOS,
       enableOrbitTrails: false,
       // Keep stars visible in tiny previews
       enableBoundaryWrapping: true,
