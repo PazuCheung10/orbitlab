@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation'
+import MotionCanvasPage from './motion-canvas/page'
 
 export default function Home() {
-  redirect('/motion-canvas')
+  return <MotionCanvasPage />
 }
 

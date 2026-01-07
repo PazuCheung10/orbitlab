@@ -159,11 +159,11 @@ export default function EvolutionLabPage() {
     const configKey = `gravityConfig_${Date.now()}`
     localStorage.setItem(configKey, JSON.stringify(config))
     // Open in new window with config key as query param
-    const newWindow = window.open(`/motion-canvas?config=${configKey}`, '_blank')
+    const newWindow = window.open(`/?config=${configKey}`, '_blank')
     if (!newWindow) {
       // Fallback if popup blocked
       localStorage.setItem('gravityConfig', JSON.stringify(config))
-      window.location.href = '/motion-canvas'
+      window.location.href = '/'
     }
   }, [])
 
@@ -262,7 +262,7 @@ export default function EvolutionLabPage() {
             // Load genome into main demo
             const config = GenomeDecoder.decode(detailGenome)
             localStorage.setItem('gravityConfig', JSON.stringify(config))
-            window.location.href = '/motion-canvas'
+            window.location.href = '/'
           }}
         />
       )}
