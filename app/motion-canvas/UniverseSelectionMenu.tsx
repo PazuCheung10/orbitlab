@@ -2,11 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { GravityConfig } from '@/lib/gravity/config'
-import { UNIVERSE_PRESETS } from '@/lib/gravity/universe-presets'
+import { generateProceduralUniverse, getPresetConfig, UNIVERSE_PRESETS } from '@/lib/gravity/universe-presets'
 import { GravitySimulation } from '@/lib/gravity/simulation'
-// @ts-ignore - JSON import
-import initialUniverseData from '@/initial-universe.json'
-const initialUniverse = initialUniverseData as { width: number; height: number; stars: Array<{ x: number; y: number; mass: number }> }
 import styles from './UniverseSelectionMenu.module.css'
 
 interface SavedState {
@@ -27,6 +24,31 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
   const simulationRefs = useRef<Array<GravitySimulation | null>>([])
   const animationFrameRef = useRef<number | null>(null)
 
+  const buildPreviewConfig = (presetConfig: Partial<GravityConfig>): GravityConfig => {
+    return {
+      ...currentConfig,
+      ...presetConfig,
+
+      // Preview-only stability overrides
+      enableMerging: false,
+      enableOrbitTrails: false,
+      // Keep stars visible in tiny previews
+      enableBoundaryWrapping: true,
+    }
+  }
+
+  const seedPreviewUniverse = (sim: GravitySimulation, seedKey: string) => {
+    const universe = generateProceduralUniverse({
+      width: sim.width,
+      height: sim.height,
+      config: sim.config,
+      seed: seedKey,
+      // thumbnails look better denser
+      starCount: 60,
+    })
+    sim.loadUniverse(universe)
+  }
+
   // Load saved states from localStorage
   useEffect(() => {
     try {
@@ -44,80 +66,42 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
   useEffect(() => {
     // React StrictMode runs effects twice in dev — guard so you don't start 2 RAF loops
     if (animationFrameRef.current !== null) return
-    
-    const canvasWidth = 160
-    const canvasHeight = 120
-    
+
     // DON'T wipe previewRefs here — React owns ref timing.
-    // Just rebuild sims.
+    // Lazily initialize sims when canvases are available + measured.
     simulationRefs.current = new Array(UNIVERSE_PRESETS.length).fill(null)
-    
-    UNIVERSE_PRESETS.forEach((preset, index) => {
-      const config: GravityConfig = {
-        ...currentConfig,
-        ...preset.config,
-        
-        // Preview-only stability overrides (keep these to prevent collapse)
-        enableMerging: false,
-        enableBoundaryWrapping: false,
-        // Don't override gravityConstant or softeningEpsPx - let presets show their differences
-      }
-      
-      const sim = new GravitySimulation(canvasWidth, canvasHeight, config)
-      simulationRefs.current[index] = sim
-      
-      // Generate random stars with random positions and masses
-      const numStars = 40 + Math.floor(Math.random() * 30) // 40-70 stars - way more random stars
-      const stars: Array<{ x: number; y: number; mass: number }> = []
-      const margin = 10 // Smaller margin to allow more stars
-      
-      for (let i = 0; i < numStars; i++) {
-        // Random position with margin
-        const x = margin + Math.random() * (canvasWidth - 2 * margin)
-        const y = margin + Math.random() * (canvasHeight - 2 * margin)
-        
-        // Random mass between 5 and 50
-        const mass = 5 + Math.random() * 45
-        
-        stars.push({ x, y, mass })
-      }
-      
-      sim.loadUniverse({
-        width: canvasWidth,
-        height: canvasHeight,
-        stars: stars
-      })
-      
-      // Give stars random initial velocities for interesting motion
-      sim.stars.forEach((star) => {
-        // Random velocity direction and magnitude
-        const angle = Math.random() * Math.PI * 2
-        const speed = 10 + Math.random() * 30 // Random speed between 10-40
-        star.vx = Math.cos(angle) * speed
-        star.vy = Math.sin(angle) * speed
-        star.vxHalf = star.vx
-        star.vyHalf = star.vy
-      })
-    })
     
     // Animation loop - safe handling of missing refs
     const animate = () => {
       UNIVERSE_PRESETS.forEach((_, index) => {
-        const sim = simulationRefs.current[index]
         const canvas = previewRefs.current[index]
         
         // Skip this frame if refs not ready (they'll be available next frame)
-        if (!sim || !canvas) return
-        
-        // Match DPR so it's visible/crisp
+        if (!canvas) return
+
         const dpr = window.devicePixelRatio || 1
-        const w = canvasWidth
-        const h = canvasHeight
-        if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
-          canvas.width = w * dpr
-          canvas.height = h * dpr
-          canvas.style.width = `${w}px`
-          canvas.style.height = `${h}px`
+        const cssW = Math.max(1, Math.floor(canvas.clientWidth || 0))
+        const cssH = Math.max(1, Math.floor(canvas.clientHeight || 0))
+
+        // If layout isn't ready yet, skip this frame.
+        if (cssW <= 1 || cssH <= 1) return
+
+        // Ensure backing store matches CSS size
+        const targetW = Math.floor(cssW * dpr)
+        const targetH = Math.floor(cssH * dpr)
+        if (canvas.width !== targetW || canvas.height !== targetH) {
+          canvas.width = targetW
+          canvas.height = targetH
+        }
+
+        let sim = simulationRefs.current[index]
+        // Recreate sim if missing or size changed (keeps "universe" fitting the box)
+        if (!sim || sim.width !== cssW || sim.height !== cssH) {
+          const preset = UNIVERSE_PRESETS[index]
+          const config = buildPreviewConfig(getPresetConfig(preset))
+          sim = new GravitySimulation(cssW, cssH, config)
+          simulationRefs.current[index] = sim
+          seedPreviewUniverse(sim, `selection-preview-${index}-${preset.name}`)
         }
         
         const ctx = canvas.getContext('2d')
@@ -129,7 +113,7 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
         
         // Clear and draw background
         ctx.fillStyle = '#000'
-        ctx.fillRect(0, 0, w, h)
+        ctx.fillRect(0, 0, cssW, cssH)
         
         // Render stars
         ctx.fillStyle = '#fff'

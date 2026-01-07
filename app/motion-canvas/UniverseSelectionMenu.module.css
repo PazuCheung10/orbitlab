@@ -120,7 +120,7 @@
 
 .preview {
   width: 100%;
-  height: 100px;
+  aspect-ratio: 4 / 3;
   background: radial-gradient(
     circle at center,
     #1a1a1a 0%,
@@ -164,7 +164,7 @@
   }
   
   .preview {
-    height: 60px;
+    aspect-ratio: 4 / 3;
     margin-bottom: 6px;
   }
   
