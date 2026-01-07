@@ -2,11 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { GravityConfig } from '@/lib/gravity/config'
-import { UNIVERSE_PRESETS } from '@/lib/gravity/universe-presets'
+import { generateProceduralUniverse, getPresetConfig, UNIVERSE_PRESETS } from '@/lib/gravity/universe-presets'
 import { GravitySimulation } from '@/lib/gravity/simulation'
-// @ts-ignore - JSON import
-import initialUniverseData from '@/initial-universe.json'
-const initialUniverse = initialUniverseData as { width: number; height: number; stars: Array<{ x: number; y: number; mass: number }> }
 import styles from './UniverseSelectionMenu.module.css'
 
 interface SavedState {
@@ -26,6 +23,59 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
   const previewRefs = useRef<Array<HTMLCanvasElement | null>>([])
   const simulationRefs = useRef<Array<GravitySimulation | null>>([])
   const animationFrameRef = useRef<number | null>(null)
+  const previewSeedRef = useRef<Array<string>>([])
+
+  const buildPreviewConfig = (presetConfig: Partial<GravityConfig>): GravityConfig => {
+    const baseGravityConstant = (presetConfig.gravityConstant ?? currentConfig.gravityConstant)
+    const baseMinMass = (presetConfig.minMass ?? currentConfig.minMass)
+    const baseMaxMass = (presetConfig.maxMass ?? currentConfig.maxMass)
+    // In thumbnails: reduce max mass by 1/3 so huge stars don't dominate the preview
+    const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
+    const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85)
+    const baseRadiusScale = (presetConfig.radiusScale ?? currentConfig.radiusScale)
+    // In thumbnails: shrink physical radii so the whole "universe" reads at tiny scale
+    const previewRadiusScale = baseRadiusScale * 0.55
+
+    return {
+      ...currentConfig,
+      ...presetConfig,
+
+      // Preview-only stability overrides
+      enableMerging: true,
+      enableOrbitTrails: false,
+      // Keep stars visible in tiny previews
+      enableBoundaryWrapping: true,
+
+      gravityConstant: baseGravityConstant * 0.2,
+      minMass: previewMinMass,
+      maxMass: previewMaxMass,
+      radiusScale: previewRadiusScale,
+    }
+  }
+
+  const seedPreviewUniverse = (sim: GravitySimulation, seedKey: string, starCount?: number) => {
+    const universe = generateProceduralUniverse({
+      width: sim.width,
+      height: sim.height,
+      config: sim.config,
+      seed: seedKey,
+      // thumbnails look better denser
+      starCount: starCount ?? Math.round(60 * 1.3),
+    })
+    sim.loadUniverse(universe)
+
+    // Thumbnail universe is tiny; scale initial velocities down proportionally to size.
+    const minDim = Math.min(sim.width, sim.height)
+    const speedScale = Math.max(0.1, Math.min(1.0, minDim / 600))
+    if (speedScale !== 1.0) {
+      sim.stars.forEach((star) => {
+        star.vx *= speedScale
+        star.vy *= speedScale
+        star.vxHalf *= speedScale
+        star.vyHalf *= speedScale
+      })
+    }
+  }
 
   // Load saved states from localStorage
   useEffect(() => {
@@ -44,80 +94,47 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
   useEffect(() => {
     // React StrictMode runs effects twice in dev — guard so you don't start 2 RAF loops
     if (animationFrameRef.current !== null) return
-    
-    const canvasWidth = 160
-    const canvasHeight = 120
-    
+
     // DON'T wipe previewRefs here — React owns ref timing.
-    // Just rebuild sims.
+    // Lazily initialize sims when canvases are available + measured.
     simulationRefs.current = new Array(UNIVERSE_PRESETS.length).fill(null)
-    
-    UNIVERSE_PRESETS.forEach((preset, index) => {
-      const config: GravityConfig = {
-        ...currentConfig,
-        ...preset.config,
-        
-        // Preview-only stability overrides (keep these to prevent collapse)
-        enableMerging: false,
-        enableBoundaryWrapping: false,
-        // Don't override gravityConstant or softeningEpsPx - let presets show their differences
-      }
-      
-      const sim = new GravitySimulation(canvasWidth, canvasHeight, config)
-      simulationRefs.current[index] = sim
-      
-      // Generate random stars with random positions and masses
-      const numStars = 40 + Math.floor(Math.random() * 30) // 40-70 stars - way more random stars
-      const stars: Array<{ x: number; y: number; mass: number }> = []
-      const margin = 10 // Smaller margin to allow more stars
-      
-      for (let i = 0; i < numStars; i++) {
-        // Random position with margin
-        const x = margin + Math.random() * (canvasWidth - 2 * margin)
-        const y = margin + Math.random() * (canvasHeight - 2 * margin)
-        
-        // Random mass between 5 and 50
-        const mass = 5 + Math.random() * 45
-        
-        stars.push({ x, y, mass })
-      }
-      
-      sim.loadUniverse({
-        width: canvasWidth,
-        height: canvasHeight,
-        stars: stars
-      })
-      
-      // Give stars random initial velocities for interesting motion
-      sim.stars.forEach((star) => {
-        // Random velocity direction and magnitude
-        const angle = Math.random() * Math.PI * 2
-        const speed = 10 + Math.random() * 30 // Random speed between 10-40
-        star.vx = Math.cos(angle) * speed
-        star.vy = Math.sin(angle) * speed
-        star.vxHalf = star.vx
-        star.vyHalf = star.vy
-      })
+    previewSeedRef.current = UNIVERSE_PRESETS.map((preset, index) => {
+      const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+      return `selection-preview-${index}-${preset.name}-${nonce}`
     })
     
     // Animation loop - safe handling of missing refs
     const animate = () => {
       UNIVERSE_PRESETS.forEach((_, index) => {
-        const sim = simulationRefs.current[index]
         const canvas = previewRefs.current[index]
         
         // Skip this frame if refs not ready (they'll be available next frame)
-        if (!sim || !canvas) return
-        
-        // Match DPR so it's visible/crisp
+        if (!canvas) return
+
         const dpr = window.devicePixelRatio || 1
-        const w = canvasWidth
-        const h = canvasHeight
-        if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
-          canvas.width = w * dpr
-          canvas.height = h * dpr
-          canvas.style.width = `${w}px`
-          canvas.style.height = `${h}px`
+        const cssW = Math.max(1, Math.floor(canvas.clientWidth || 0))
+        const cssH = Math.max(1, Math.floor(canvas.clientHeight || 0))
+
+        // If layout isn't ready yet, skip this frame.
+        if (cssW <= 1 || cssH <= 1) return
+
+        // Ensure backing store matches CSS size
+        const targetW = Math.floor(cssW * dpr)
+        const targetH = Math.floor(cssH * dpr)
+        if (canvas.width !== targetW || canvas.height !== targetH) {
+          canvas.width = targetW
+          canvas.height = targetH
+        }
+
+        let sim = simulationRefs.current[index]
+        // Recreate sim if missing or size changed (keeps "universe" fitting the box)
+        if (!sim || sim.width !== cssW || sim.height !== cssH) {
+          const preset = UNIVERSE_PRESETS[index]
+          const config = buildPreviewConfig(getPresetConfig(preset))
+          sim = new GravitySimulation(cssW, cssH, config)
+          simulationRefs.current[index] = sim
+          const seedKey = previewSeedRef.current[index] ?? `selection-preview-${index}-${preset.name}`
+          seedPreviewUniverse(sim, seedKey)
         }
         
         const ctx = canvas.getContext('2d')
@@ -126,10 +143,18 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
         
         // Normal speed for thumbnails
         sim.update(0.008) // Normal preview speed
+
+        // If everything merged down to ~nothing, reset with a fresh mini-universe
+        if (sim.stars.length <= 1) {
+          const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+          const seedKey = `selection-preview-${index}-respawn-${nonce}`
+          previewSeedRef.current[index] = seedKey
+          seedPreviewUniverse(sim, seedKey, 30)
+        }
         
         // Clear and draw background
         ctx.fillStyle = '#000'
-        ctx.fillRect(0, 0, w, h)
+        ctx.fillRect(0, 0, cssW, cssH)
         
         // Render stars
         ctx.fillStyle = '#fff'
@@ -143,7 +168,8 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
           
           // Guard radius against NaN/undefined
           const baseRadius = Number.isFinite(star.radius) ? star.radius : 1
-          const r = Math.max(2, baseRadius * 1.5)
+          // Thumbnail tuning: keep stars small but still readable
+          const r = Math.max(1.2, Math.min(6, 0.8 + Math.pow(baseRadius, 0.75) * 0.9))
           
           ctx.beginPath()
           ctx.arc(x, y, r, 0, Math.PI * 2)

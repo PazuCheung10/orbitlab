@@ -2,11 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { GravityConfig, PhysicsMode } from '@/lib/gravity/config'
-import { UNIVERSE_PRESETS, randomizeUniverse } from '@/lib/gravity/universe-presets'
+import { generateProceduralUniverse, getPresetConfig, UNIVERSE_PRESETS, randomizeUniverse } from '@/lib/gravity/universe-presets'
 import { GravitySimulation } from '@/lib/gravity/simulation'
-// @ts-ignore - JSON import
-import initialUniverseData from '@/initial-universe.json'
-const initialUniverse = initialUniverseData as { width: number; height: number; stars: Array<{ x: number; y: number; mass: number }> }
 import styles from './UniverseBrowser.module.css'
 
 interface UniverseBrowserProps {
@@ -21,6 +18,7 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
   const previewRefs = useRef<Array<HTMLCanvasElement | null>>([])
   const simulationRefs = useRef<Array<GravitySimulation | null>>([])
   const animationFrameRefs = useRef<Array<number | null>>([])
+  const previewSeedRef = useRef<Array<string>>([])
 
   // Initialize independent simulations for each universe
   useEffect(() => {
@@ -28,32 +26,9 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
       previewRefs.current = []
       simulationRefs.current = []
       animationFrameRefs.current = []
+      previewSeedRef.current = UNIVERSE_PRESETS.map((p, i) => `browser-preview-${i}-${p.name}-${Date.now()}`)
       
-      UNIVERSE_PRESETS.forEach((preset, index) => {
-        // Create config
-        const config: GravityConfig = {
-          ...currentConfig,
-          ...preset.config
-        }
-        
-        // Create independent simulation for this universe
-        const sim = new GravitySimulation(160, 120, config)
-        simulationRefs.current[index] = sim
-        
-        // Initialize universe
-        const initUniverse = () => {
-          sim.loadUniverse({
-            width: 160,
-            height: 120,
-            stars: initialUniverse.stars.map(s => ({
-              x: s.x * (160 / initialUniverse.width),
-              y: s.y * (120 / initialUniverse.height),
-              mass: s.mass
-            }))
-          })
-        }
-        initUniverse()
-      })
+      // Sims are created lazily when canvases are laid out (so sizing matches the card)
     }
     
     // Cleanup on unmount or close
@@ -73,28 +48,122 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
     const animate = () => {
       UNIVERSE_PRESETS.forEach((preset, index) => {
         const canvas = previewRefs.current[index]
-        const sim = simulationRefs.current[index]
+        let sim = simulationRefs.current[index]
         
-        if (canvas && sim) {
-          sim.update(1/60)
+        if (canvas) {
+          const dpr = window.devicePixelRatio || 1
+          const cssW = Math.max(1, Math.floor(canvas.clientWidth || 0))
+          const cssH = Math.max(1, Math.floor(canvas.clientHeight || 0))
+
+          if (cssW <= 1 || cssH <= 1) return
+
+          const targetW = Math.floor(cssW * dpr)
+          const targetH = Math.floor(cssH * dpr)
+          if (canvas.width !== targetW || canvas.height !== targetH) {
+            canvas.width = targetW
+            canvas.height = targetH
+          }
+
+          if (!sim || sim.width !== cssW || sim.height !== cssH) {
+            const presetConfig = getPresetConfig(preset)
+            const baseGravityConstant = (presetConfig.gravityConstant ?? currentConfig.gravityConstant)
+            const baseMinMass = (presetConfig.minMass ?? currentConfig.minMass)
+            const baseMaxMass = (presetConfig.maxMass ?? currentConfig.maxMass)
+            const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
+            const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85)
+            const baseRadiusScale = (presetConfig.radiusScale ?? currentConfig.radiusScale)
+            const previewRadiusScale = baseRadiusScale * 0.55
+
+            const config: GravityConfig = {
+              ...currentConfig,
+              ...presetConfig,
+              // keep previews lively + visible
+              enableMerging: true,
+              enableBoundaryWrapping: true,
+              enableOrbitTrails: false,
+              gravityConstant: baseGravityConstant * 0.2,
+              minMass: previewMinMass,
+              maxMass: previewMaxMass,
+              radiusScale: previewRadiusScale,
+            }
+
+            sim = new GravitySimulation(cssW, cssH, config)
+            simulationRefs.current[index] = sim
+
+            const seedKey = previewSeedRef.current[index] ?? `browser-preview-${index}-${preset.name}`
+            sim.loadUniverse(
+              generateProceduralUniverse({
+                width: cssW,
+                height: cssH,
+                config,
+                seed: seedKey,
+                starCount: Math.round(55 * 1.3),
+              })
+            )
+
+            // Scale initial velocities down for tiny preview "universes"
+            const minDim = Math.min(sim.width, sim.height)
+            const speedScale = Math.max(0.1, Math.min(1.0, minDim / 600))
+            if (speedScale !== 1.0) {
+              sim.stars.forEach((star) => {
+                star.vx *= speedScale
+                star.vy *= speedScale
+                star.vxHalf *= speedScale
+                star.vyHalf *= speedScale
+              })
+            }
+          }
+
+          sim.update(1 / 60)
+
+          // If everything merged into 1 star, reset with a fresh mini-universe
+          if (sim.stars.length <= 1) {
+            const seedKey = `browser-preview-${index}-${preset.name}-respawn-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+            previewSeedRef.current[index] = seedKey
+
+            sim.loadUniverse(
+              generateProceduralUniverse({
+                width: sim.width,
+                height: sim.height,
+                config: sim.config,
+                seed: seedKey,
+                starCount: 30,
+              })
+            )
+
+            // Scale initial velocities down for tiny preview "universes"
+            const minDim = Math.min(sim.width, sim.height)
+            const speedScale = Math.max(0.1, Math.min(1.0, minDim / 600))
+            if (speedScale !== 1.0) {
+              sim.stars.forEach((star) => {
+                star.vx *= speedScale
+                star.vy *= speedScale
+                star.vxHalf *= speedScale
+                star.vyHalf *= speedScale
+              })
+            }
+          }
           
           const ctx = canvas.getContext('2d')
           if (ctx) {
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
             // Draw
             ctx.fillStyle = '#0a0a0a'
-            ctx.fillRect(0, 0, 160, 120)
+            ctx.fillRect(0, 0, cssW, cssH)
             
             ctx.fillStyle = '#ffffff'
             for (const star of sim.stars) {
+              const baseRadius = Number.isFinite(star.radius) ? star.radius : 1
+              const r = Math.max(1.0, Math.min(6, 0.7 + Math.pow(baseRadius, 0.75) * 0.85))
               ctx.beginPath()
-              ctx.arc(star.x, star.y, Math.max(1, star.radius * (120 / initialUniverse.height)), 0, Math.PI * 2)
+              ctx.arc(star.x, star.y, r, 0, Math.PI * 2)
               ctx.fill()
             }
             
             if (sim.centralSun) {
               ctx.fillStyle = '#ffff00'
               ctx.beginPath()
-              ctx.arc(sim.centralSun.x, sim.centralSun.y, Math.max(2, sim.centralSun.radius * (120 / initialUniverse.height)), 0, Math.PI * 2)
+              ctx.arc(sim.centralSun.x, sim.centralSun.y, Math.max(2, sim.centralSun.radius), 0, Math.PI * 2)
               ctx.fill()
             }
           }
@@ -113,16 +182,39 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
     e.stopPropagation() // Prevent card click
     const sim = simulationRefs.current[index]
     if (sim) {
-      // Reload initial universe for this preview
-      sim.loadUniverse({
-        width: 160,
-        height: 120,
-        stars: initialUniverse.stars.map(s => ({
-          x: s.x * (160 / initialUniverse.width),
-          y: s.y * (120 / initialUniverse.height),
-          mass: s.mass
-        }))
-      })
+      // Reseed procedural preview
+      const preset = UNIVERSE_PRESETS[index]
+      const presetConfig = getPresetConfig(preset)
+      const baseGravityConstant = (presetConfig.gravityConstant ?? currentConfig.gravityConstant)
+      const baseMinMass = (presetConfig.minMass ?? currentConfig.minMass)
+      const baseMaxMass = (presetConfig.maxMass ?? currentConfig.maxMass)
+      const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
+      const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85)
+      const baseRadiusScale = (presetConfig.radiusScale ?? currentConfig.radiusScale)
+      const previewRadiusScale = baseRadiusScale * 0.55
+
+      const config: GravityConfig = {
+        ...currentConfig,
+        ...presetConfig,
+        enableMerging: true,
+        enableBoundaryWrapping: true,
+        enableOrbitTrails: false,
+        gravityConstant: baseGravityConstant * 0.2,
+        minMass: previewMinMass,
+        maxMass: previewMaxMass,
+        radiusScale: previewRadiusScale,
+      }
+      sim.updateConfig(config)
+      previewSeedRef.current[index] = `browser-preview-${index}-${preset.name}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+      sim.loadUniverse(
+        generateProceduralUniverse({
+          width: sim.width,
+          height: sim.height,
+          config,
+          seed: previewSeedRef.current[index],
+          starCount: Math.round(55 * 1.3),
+        })
+      )
     }
   }
   
