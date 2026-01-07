@@ -23,7 +23,6 @@ trade-offs between stability, realism, and interactivity.
   - Preset universes with different configurations
   - Save and load universe states
   - Switch between universes like TV channels (each maintains independent state)
-- **Evolution Lab**: Genetic algorithm integration for evolving star configurations
 - **Real-time Debugging**: Adjustable physics parameters with live preview
 - **Visual Customization**: Configurable star rendering, trails, and visual effects
 
@@ -48,7 +47,7 @@ Run the development server:
 npm run dev
 ```
 
-Open [http://localhost:3000/motion-canvas](http://localhost:3000/motion-canvas) in your browser.
+Open [http://localhost:3000/](http://localhost:3000/) in your browser.
 
 ### Build
 
@@ -64,10 +63,6 @@ npm start
 ```
 MotionCanvas/
 ├── app/
-│   ├── evolution-lab/          # Genetic algorithm evolution interface
-│   │   ├── page.tsx
-│   │   ├── UniverseCard.tsx
-│   │   └── UniverseDetail.tsx
 │   ├── motion-canvas/           # Main gravity simulation interface
 │   │   ├── page.tsx
 │   │   ├── GravityDebugPanel.tsx
@@ -96,7 +91,6 @@ MotionCanvas/
 │       ├── interaction.ts
 │       └── constellation.ts
 │
-├── initial-universe.json        # Default universe configuration
 └── package.json
 ```
 
@@ -163,13 +157,6 @@ Key configuration parameters are in `lib/gravity/config.ts`:
 - `FLICK_VMAX`: Maximum launch velocity
 - `MIN_MASS` / `MAX_MASS`: Mass range for created stars
 - `HOLD_TO_MAX_SECONDS`: Time to hold for maximum mass
-
-## Evolution Lab
-
-The Evolution Lab (`/evolution-lab`) uses genetic algorithms to evolve star configurations:
-- Fitness evaluation based on orbital stability
-- Population-based evolution
-- Export evolved configurations to the main simulation
 
 ## Technologies
 

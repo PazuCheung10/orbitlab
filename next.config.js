@@ -9,6 +9,12 @@ const nextConfig = {
         destination: '/',
         permanent: false,
       },
+      // Evolution Lab removed; send old links home
+      {
+        source: '/evolution-lab',
+        destination: '/',
+        permanent: false,
+      },
     ]
   },
 }
