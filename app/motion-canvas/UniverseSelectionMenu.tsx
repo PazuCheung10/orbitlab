@@ -67,9 +67,9 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
       simulationRefs.current[index] = sim
       
       // Generate random stars with random positions and masses
-      const numStars = 10 + Math.floor(Math.random() * 5) // 10-14 stars
+      const numStars = 40 + Math.floor(Math.random() * 30) // 40-70 stars - way more random stars
       const stars: Array<{ x: number; y: number; mass: number }> = []
-      const margin = 20 // Keep stars away from edges
+      const margin = 10 // Smaller margin to allow more stars
       
       for (let i = 0; i < numStars; i++) {
         // Random position with margin

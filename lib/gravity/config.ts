@@ -9,10 +9,10 @@ export const SATELLITES_ATTRACT_EACH_OTHER = false
 
 export const LAUNCH_STRENGTH = 0.9
 export const MASS_RESISTANCE_FACTOR = 0.3 // Bigger stars launch slower
-export const GRAVITY_CONSTANT = 10000
+export const GRAVITY_CONSTANT = 5000
 export const MAX_STAR_SIZE = 12 // Not used anymore
 export const RADIUS_SCALE = 1.2
-export const RADIUS_POWER = 0.5 // sqrt for 2D
+export const RADIUS_POWER = 0.4 // mass-radius relationship
 
 export const VELOCITY_DAMPING = 0 // Zero for stable orbits
 
