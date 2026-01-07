@@ -67,26 +67,26 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
           if (!sim || sim.width !== cssW || sim.height !== cssH) {
             const presetConfig = getPresetConfig(preset)
             const baseGravityConstant = (presetConfig.gravityConstant ?? currentConfig.gravityConstant)
-            const mode = (presetConfig.physicsMode ?? currentConfig.physicsMode)
             const baseMinMass = (presetConfig.minMass ?? currentConfig.minMass)
             const baseMaxMass = (presetConfig.maxMass ?? currentConfig.maxMass)
             const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
             const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85)
             const baseRadiusScale = (presetConfig.radiusScale ?? currentConfig.radiusScale)
             const previewRadiusScale = baseRadiusScale * 0.55
+            const mergeStopMass = previewMaxMass * 1.4
 
             const config: GravityConfig = {
               ...currentConfig,
               ...presetConfig,
               // keep previews lively + visible
-              // N-body chaos thumbnails collapse into one huge center star quickly; keep it readable
-              enableMerging: mode !== PhysicsMode.N_BODY_CHAOS,
+              enableMerging: true,
               enableBoundaryWrapping: true,
               enableOrbitTrails: false,
               gravityConstant: baseGravityConstant * 0.2,
               minMass: previewMinMass,
               maxMass: previewMaxMass,
               radiusScale: previewRadiusScale,
+              mergeStopMass,
             }
 
             sim = new GravitySimulation(cssW, cssH, config)
@@ -188,25 +188,25 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
       const preset = UNIVERSE_PRESETS[index]
       const presetConfig = getPresetConfig(preset)
       const baseGravityConstant = (presetConfig.gravityConstant ?? currentConfig.gravityConstant)
-      const mode = (presetConfig.physicsMode ?? currentConfig.physicsMode)
       const baseMinMass = (presetConfig.minMass ?? currentConfig.minMass)
       const baseMaxMass = (presetConfig.maxMass ?? currentConfig.maxMass)
       const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
       const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85)
       const baseRadiusScale = (presetConfig.radiusScale ?? currentConfig.radiusScale)
       const previewRadiusScale = baseRadiusScale * 0.55
+      const mergeStopMass = previewMaxMass * 1.4
 
       const config: GravityConfig = {
         ...currentConfig,
         ...presetConfig,
-        // N-body chaos thumbnails collapse into one huge center star quickly; keep it readable
-        enableMerging: mode !== PhysicsMode.N_BODY_CHAOS,
+        enableMerging: true,
         enableBoundaryWrapping: true,
         enableOrbitTrails: false,
         gravityConstant: baseGravityConstant * 0.2,
         minMass: previewMinMass,
         maxMass: previewMaxMass,
         radiusScale: previewRadiusScale,
+        mergeStopMass,
       }
       sim.updateConfig(config)
       previewSeedRef.current[index] = `browser-preview-${index}-${preset.name}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`

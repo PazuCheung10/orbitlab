@@ -700,6 +700,14 @@ export class GravitySimulation {
         
         for (let j = i + 1; j < this.stars.length; j++) {
           if (toRemove.has(j)) continue
+
+          // Optional thumbnail safeguard: prevent very massive stars from snowballing further
+          const mergeStopMass = this.config.mergeStopMass
+          if (mergeStopMass !== undefined) {
+            if (this.stars[i].mass >= mergeStopMass || this.stars[j].mass >= mergeStopMass) {
+              continue
+            }
+          }
           
           const distance = this.stars[i].distanceTo(
             this.stars[j],

@@ -80,6 +80,11 @@ export interface GravityConfig {
   maxStars: number
   
   enableMerging: boolean
+  /**
+   * Optional: if set, stars with mass >= mergeStopMass will not merge further.
+   * Useful for thumbnails to prevent snowballing into a single giant "center" star.
+   */
+  mergeStopMass?: number
   enableOrbitTrails: boolean
   orbitTrailFadeTime: number
   enableBoundaryWrapping: boolean // Torus mode
