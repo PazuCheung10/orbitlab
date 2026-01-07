@@ -47,6 +47,7 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
       // Keep stars visible in tiny previews
       enableBoundaryWrapping: true,
 
+      // Base thumbnail tuning; we additionally scale by thumbnail size at runtime.
       gravityConstant: baseGravityConstant * 0.8,
       potentialEnergyDegree: 1.7,
       minMass: previewMinMass,
@@ -133,7 +134,14 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
         // Recreate sim if missing or size changed (keeps "universe" fitting the box)
         if (!sim || sim.width !== cssW || sim.height !== cssH) {
           const preset = UNIVERSE_PRESETS[index]
-          const config = buildPreviewConfig(getPresetConfig(preset))
+          const baseConfig = buildPreviewConfig(getPresetConfig(preset))
+          // If the thumbnail is physically smaller, scale gravity down proportionally.
+          const minDim = Math.min(cssW, cssH)
+          const sizeScale = Math.max(0.1, Math.min(1.0, minDim / 600))
+          const config = {
+            ...baseConfig,
+            gravityConstant: baseConfig.gravityConstant * sizeScale,
+          }
           sim = new GravitySimulation(cssW, cssH, config)
           simulationRefs.current[index] = sim
           const seedKey = previewSeedRef.current[index] ?? `selection-preview-${index}-${preset.name}`

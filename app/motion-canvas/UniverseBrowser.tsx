@@ -90,6 +90,11 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
               mergeStopMass,
             }
 
+            // If the thumbnail is physically smaller, scale gravity down proportionally.
+            const thumbMinDim = Math.min(cssW, cssH)
+            const sizeScale = Math.max(0.1, Math.min(1.0, thumbMinDim / 600))
+            config.gravityConstant *= sizeScale
+
             sim = new GravitySimulation(cssW, cssH, config)
             simulationRefs.current[index] = sim
 
@@ -216,6 +221,10 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
         radiusScale: previewRadiusScale,
         mergeStopMass,
       }
+      // Scale gravity down proportionally for tiny thumbnails.
+      const minDim = Math.min(sim.width, sim.height)
+      const sizeScale = Math.max(0.1, Math.min(1.0, minDim / 600))
+      config.gravityConstant *= sizeScale
       sim.updateConfig(config)
       previewSeedRef.current[index] = `browser-preview-${index}-${preset.name}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
       sim.loadUniverse(
