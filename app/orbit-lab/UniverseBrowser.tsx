@@ -72,8 +72,8 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
             const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
             const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85)
             const baseRadiusScale = (presetConfig.radiusScale ?? currentConfig.radiusScale)
-            const previewRadiusScale = baseRadiusScale * 0.55
-            const mergeStopMass = previewMaxMass * 1.4
+            const previewRadiusScale = baseRadiusScale * 0.7
+            const mergeStopMass = previewMaxMass * 3.0
 
             const config: GravityConfig = {
               ...currentConfig,
@@ -126,7 +126,10 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
             }
           }
 
-          sim.update(1 / 60)
+          // Thumbnail "universe" is smaller → scale timestep down so motion doesn't look too fast
+          const thumbMinDim = Math.min(cssW, cssH)
+          const dtScale = Math.max(0.05, Math.min(0.4, thumbMinDim / 600))
+          sim.update((1 / 60) * dtScale)
 
           // If everything merged into 1 star, reset with a fresh mini-universe
           if (sim.stars.length <= 1) {
@@ -209,8 +212,8 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
       const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
       const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85)
       const baseRadiusScale = (presetConfig.radiusScale ?? currentConfig.radiusScale)
-      const previewRadiusScale = baseRadiusScale * 0.55
-      const mergeStopMass = previewMaxMass * 1.4
+      const previewRadiusScale = baseRadiusScale * 0.7
+      const mergeStopMass = previewMaxMass * 3.0
 
       const config: GravityConfig = {
         ...currentConfig,

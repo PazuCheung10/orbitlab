@@ -34,8 +34,10 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
     const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85)
     const baseRadiusScale = (presetConfig.radiusScale ?? currentConfig.radiusScale)
     // In thumbnails: shrink physical radii so the whole "universe" reads at tiny scale
-    const previewRadiusScale = baseRadiusScale * 0.55
-    const mergeStopMass = previewMaxMass * 1.4
+    // Slightly larger than before so merges still happen (visual size is clamped separately)
+    const previewRadiusScale = baseRadiusScale * 0.7
+    // Allow more merges before "snowball cap" kicks in
+    const mergeStopMass = previewMaxMass * 3.0
 
     return {
       ...currentConfig,
@@ -155,8 +157,10 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
         if (!ctx) return
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
         
-        // Normal speed for thumbnails
-        sim.update(0.008) // Normal preview speed
+        // Thumbnail "universe" is smaller → scale timestep down so motion doesn't look too fast
+        const thumbMinDim = Math.min(cssW, cssH)
+        const dtScale = Math.max(0.05, Math.min(0.4, thumbMinDim / 600))
+        sim.update(0.008 * dtScale)
 
         // If everything merged down to ~nothing, reset with a fresh mini-universe
         if (sim.stars.length <= 1) {
