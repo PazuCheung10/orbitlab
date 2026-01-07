@@ -8,6 +8,7 @@ import GravityDebugPanel from './GravityDebugPanel'
 import UniverseBrowser from './UniverseBrowser'
 import UniverseSelectionMenu from './UniverseSelectionMenu'
 import { generateProceduralUniverse } from '@/lib/gravity/universe-presets'
+import { generateGaussianStars } from '@/lib/gravity/starfield'
 import styles from './page.module.css'
 
 export default function MotionCanvasPage() {
@@ -253,6 +254,55 @@ export default function MotionCanvasPage() {
             onConfigChange={handleConfigChange}
             starCount={starCount}
             onSaveState={handleSaveState}
+            onRandomizeStars={() => {
+              if (!systemRef.current) return
+              const sim = systemRef.current.simulation
+              const w = sim.width
+              const h = sim.height
+
+              const remaining = Math.max(0, config.maxStars - sim.stars.length)
+              if (remaining <= 0) return
+
+              // Request 10-30, but never exceed remaining capacity
+              const requested = 10 + Math.floor(Math.random() * 21) // 10..30
+              const count = Math.min(requested, remaining)
+
+              const newStars = generateGaussianStars({
+                width: w,
+                height: h,
+                config,
+                count,
+              })
+
+              // Estimate "central mass" like simulation does, but based on current state
+              const existingCount = sim.stars.length
+              const existingTotalMass = existingCount > 0 ? sim.stars.reduce((sum, s) => sum + s.mass, 0) : 0
+              const meanMass = existingCount > 0 ? existingTotalMass / existingCount : 100
+              const centerMassEstimate = meanMass * 10
+
+              for (const s of newStars) {
+                // Tangential-ish velocity for immediate interesting motion (like loadUniverse)
+                const dx = s.x - w / 2
+                const dy = s.y - h / 2
+                const r = Math.sqrt(dx * dx + dy * dy)
+
+                let vx = 0
+                let vy = 0
+                if (r > 1e-6) {
+                  const vCirc = Math.sqrt((config.gravityConstant * centerMassEstimate) / r)
+                  const v = vCirc * config.orbitFactor
+                  const angle = Math.atan2(dy, dx)
+                  const tangentialAngle = angle + Math.PI / 2
+                  vx = Math.cos(tangentialAngle) * v
+                  vy = Math.sin(tangentialAngle) * v
+                }
+
+                const star = new Star(s.x, s.y, s.mass, vx, vy, config.radiusScale, config.radiusPower)
+                star.vxHalf = vx
+                star.vyHalf = vy
+                sim.stars.push(star)
+              }
+            }}
             onClearStars={() => {
               if (systemRef.current && typeof systemRef.current.clearAllStars === 'function') {
                 systemRef.current.clearAllStars()

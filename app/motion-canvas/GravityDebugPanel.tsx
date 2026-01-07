@@ -9,6 +9,7 @@ interface GravityDebugPanelProps {
   onConfigChange: (config: GravityConfig) => void
   starCount: number
   onClearStars?: () => void
+  onRandomizeStars?: () => void
   onSaveState?: () => void
   energyStats?: {
     kinetic: number
@@ -19,7 +20,7 @@ interface GravityDebugPanelProps {
   } | null
 }
 
-export default function GravityDebugPanel({ config, onConfigChange, starCount, onClearStars, onSaveState, energyStats }: GravityDebugPanelProps) {
+export default function GravityDebugPanel({ config, onConfigChange, starCount, onClearStars, onRandomizeStars, onSaveState, energyStats }: GravityDebugPanelProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [localConfig, setLocalConfig] = useState<GravityConfig>({ ...config })
   const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null)
@@ -155,6 +156,21 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
                   onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(50, 150, 50, 0.3)'}
                 >
                   💾 Save
+                </button>
+              )}
+              {onRandomizeStars && (
+                <button
+                  onClick={onRandomizeStars}
+                  className={styles.controlButton}
+                  style={{
+                    backgroundColor: 'rgba(120, 80, 255, 0.35)',
+                    color: 'white',
+                    border: '1px solid rgba(120, 80, 255, 0.6)'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(120, 80, 255, 0.55)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(120, 80, 255, 0.35)'}
+                >
+                  Add Random (10-30)
                 </button>
               )}
               {onClearStars && (
