@@ -14,6 +14,17 @@ export class GravityInteraction {
   }
 
   private setupEventListeners(): void {
+    // Prevent text selection on canvas
+    this.canvas.addEventListener('selectstart', (e) => {
+      e.preventDefault()
+      return false
+    })
+    
+    this.canvas.addEventListener('dragstart', (e) => {
+      e.preventDefault()
+      return false
+    })
+
     // Track cursor everywhere so it's always visible
     window.addEventListener('mousemove', (e) => {
       const rect = this.canvas.getBoundingClientRect()
