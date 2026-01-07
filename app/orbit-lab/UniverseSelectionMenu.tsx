@@ -64,7 +64,8 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
       config: sim.config,
       seed: seedKey,
       // thumbnails look better denser
-      starCount: starCount ?? Math.round(60 * 1.3 * 0.7),
+      // reduce another 30% (0.7x again)
+      starCount: starCount ?? Math.round(60 * 1.3 * 0.7 * 0.7),
     })
     sim.loadUniverse(universe)
 
@@ -160,7 +161,7 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
           const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
           const seedKey = `selection-preview-${index}-respawn-${nonce}`
           previewSeedRef.current[index] = seedKey
-          seedPreviewUniverse(sim, seedKey, Math.round(30 * 0.7))
+          seedPreviewUniverse(sim, seedKey, Math.round(30 * 0.7 * 0.7))
         }
         
         // Clear and draw background

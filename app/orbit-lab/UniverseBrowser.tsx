@@ -105,7 +105,8 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
                 height: cssH,
                 config,
                 seed: seedKey,
-                starCount: Math.round(55 * 1.3 * 0.7),
+                // reduce another 30% (0.7x again)
+                starCount: Math.round(55 * 1.3 * 0.7 * 0.7),
               })
             )
 
@@ -135,7 +136,7 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
                 height: sim.height,
                 config: sim.config,
                 seed: seedKey,
-                starCount: Math.round(30 * 0.7),
+                starCount: Math.round(30 * 0.7 * 0.7),
               })
             )
 
@@ -233,7 +234,7 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
           height: sim.height,
           config,
           seed: previewSeedRef.current[index],
-          starCount: Math.round(55 * 1.3 * 0.7),
+          starCount: Math.round(55 * 1.3 * 0.7 * 0.7),
         })
       )
     }
