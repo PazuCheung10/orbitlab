@@ -82,9 +82,8 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
               enableMerging: true,
               enableBoundaryWrapping: true,
               enableOrbitTrails: false,
-              // Decrease thumbnail gravity by 30% (0.8 -> 0.56).
-              gravityConstant: baseGravityConstant * 0.56,
-              potentialEnergyDegree: 1.7,
+              // Thumbnail tuning: reduce gravity by 30% (per request); we additionally scale by thumbnail size below.
+              gravityConstant: baseGravityConstant * 0.7,
               minMass: previewMinMass,
               maxMass: previewMaxMass,
               radiusScale: previewRadiusScale,
@@ -95,6 +94,7 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
             const thumbMinDim = Math.min(cssW, cssH)
             const sizeScale = Math.max(0.1, Math.min(1.0, thumbMinDim / 600))
             config.gravityConstant *= sizeScale
+            config.softeningEpsPx *= sizeScale
 
             sim = new GravitySimulation(cssW, cssH, config)
             simulationRefs.current[index] = sim
@@ -108,7 +108,8 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
                 seed: seedKey,
                 // reduce another 30% (0.7x again)
                 // reduce 40% again (0.6x)
-                starCount: Math.round(55 * 1.3 * 0.7 * 0.7 * 0.6),
+                // reduce 30% again (0.7x)
+                starCount: Math.round(55 * 1.3 * 0.7 * 0.7 * 0.6 * 0.7),
               })
             )
 
@@ -138,7 +139,7 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
                 height: sim.height,
                 config: sim.config,
                 seed: seedKey,
-                starCount: Math.round(30 * 0.7 * 0.7 * 0.6),
+                starCount: Math.round(30 * 0.7 * 0.7 * 0.6 * 0.7),
               })
             )
 
@@ -217,9 +218,8 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
         enableMerging: true,
         enableBoundaryWrapping: true,
         enableOrbitTrails: false,
-        // Decrease thumbnail gravity by 30% (0.8 -> 0.56).
-        gravityConstant: baseGravityConstant * 0.56,
-        potentialEnergyDegree: 1.7,
+        // Thumbnail tuning: reduce gravity by 30% (per request); we additionally scale by thumbnail size below.
+        gravityConstant: baseGravityConstant * 0.7,
         minMass: previewMinMass,
         maxMass: previewMaxMass,
         radiusScale: previewRadiusScale,
@@ -229,6 +229,7 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
       const minDim = Math.min(sim.width, sim.height)
       const sizeScale = Math.max(0.1, Math.min(1.0, minDim / 600))
       config.gravityConstant *= sizeScale
+      config.softeningEpsPx *= sizeScale
       sim.updateConfig(config)
       previewSeedRef.current[index] = `browser-preview-${index}-${preset.name}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
       sim.loadUniverse(
@@ -237,7 +238,7 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
           height: sim.height,
           config,
           seed: previewSeedRef.current[index],
-          starCount: Math.round(55 * 1.3 * 0.7 * 0.7 * 0.6),
+          starCount: Math.round(55 * 1.3 * 0.7 * 0.7 * 0.6 * 0.7),
         })
       )
     }

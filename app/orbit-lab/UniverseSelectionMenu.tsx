@@ -47,10 +47,8 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
       // Keep stars visible in tiny previews
       enableBoundaryWrapping: true,
 
-      // Base thumbnail tuning; we additionally scale by thumbnail size at runtime.
-      // Decrease thumbnail gravity by 30% (0.8 -> 0.56).
-      gravityConstant: baseGravityConstant * 0.56,
-      potentialEnergyDegree: 1.7,
+      // Thumbnail tuning: reduce gravity by 30% (per request); we additionally scale by thumbnail size at runtime.
+      gravityConstant: baseGravityConstant * 0.7,
       minMass: previewMinMass,
       maxMass: previewMaxMass,
       radiusScale: previewRadiusScale,
@@ -67,7 +65,8 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
       // thumbnails look better denser
       // reduce another 30% (0.7x again)
       // reduce 40% again (0.6x)
-      starCount: starCount ?? Math.round(60 * 1.3 * 0.7 * 0.7 * 0.6),
+      // reduce 30% again (0.7x)
+      starCount: starCount ?? Math.round(60 * 1.3 * 0.7 * 0.7 * 0.6 * 0.7),
     })
     sim.loadUniverse(universe)
 
@@ -144,6 +143,7 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
           const config = {
             ...baseConfig,
             gravityConstant: baseConfig.gravityConstant * sizeScale,
+            softeningEpsPx: baseConfig.softeningEpsPx * sizeScale,
           }
           sim = new GravitySimulation(cssW, cssH, config)
           simulationRefs.current[index] = sim
@@ -163,7 +163,7 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
           const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
           const seedKey = `selection-preview-${index}-respawn-${nonce}`
           previewSeedRef.current[index] = seedKey
-          seedPreviewUniverse(sim, seedKey, Math.round(30 * 0.7 * 0.7 * 0.6))
+          seedPreviewUniverse(sim, seedKey, Math.round(30 * 0.7 * 0.7 * 0.6 * 0.7))
         }
         
         // Clear and draw background
