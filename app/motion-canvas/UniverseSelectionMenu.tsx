@@ -47,7 +47,8 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
       // Keep stars visible in tiny previews
       enableBoundaryWrapping: true,
 
-      gravityConstant: baseGravityConstant * 0.2,
+      gravityConstant: baseGravityConstant * 0.5,
+      potentialEnergyDegree: 1.7,
       minMass: previewMinMass,
       maxMass: previewMaxMass,
       radiusScale: previewRadiusScale,
