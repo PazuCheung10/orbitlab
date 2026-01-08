@@ -30,8 +30,9 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
     const baseMinMass = (presetConfig.minMass ?? currentConfig.minMass)
     const baseMaxMass = (presetConfig.maxMass ?? currentConfig.maxMass)
     // In thumbnails: reduce max mass by 1/3 so huge stars don't dominate the preview
-    const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
-    const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85)
+    // Then bump thumbnail masses up by 50% for better readability/feel.
+    const previewMinMass = Math.max(0.001, baseMinMass * 0.85 * 1.5)
+    const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85 * 1.5)
     const baseRadiusScale = (presetConfig.radiusScale ?? currentConfig.radiusScale)
     // In thumbnails: shrink physical radii so the whole "universe" reads at tiny scale
     // Slightly larger than before so merges still happen (visual size is clamped separately)

@@ -69,8 +69,9 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
             const baseGravityConstant = (presetConfig.gravityConstant ?? currentConfig.gravityConstant)
             const baseMinMass = (presetConfig.minMass ?? currentConfig.minMass)
             const baseMaxMass = (presetConfig.maxMass ?? currentConfig.maxMass)
-            const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
-            const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85)
+            // Bump thumbnail masses up by 50% for better readability/feel.
+            const previewMinMass = Math.max(0.001, baseMinMass * 0.85 * 1.5)
+            const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85 * 1.5)
             const baseRadiusScale = (presetConfig.radiusScale ?? currentConfig.radiusScale)
             const previewRadiusScale = baseRadiusScale * 0.7
             const mergeStopMass = previewMaxMass * 3.0
@@ -190,8 +191,9 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
       const baseGravityConstant = (presetConfig.gravityConstant ?? currentConfig.gravityConstant)
       const baseMinMass = (presetConfig.minMass ?? currentConfig.minMass)
       const baseMaxMass = (presetConfig.maxMass ?? currentConfig.maxMass)
-      const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
-      const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85)
+      // Bump thumbnail masses up by 50% for better readability/feel.
+      const previewMinMass = Math.max(0.001, baseMinMass * 0.85 * 1.5)
+      const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85 * 1.5)
       const baseRadiusScale = (presetConfig.radiusScale ?? currentConfig.radiusScale)
       const previewRadiusScale = baseRadiusScale * 0.7
       const mergeStopMass = previewMaxMass * 3.0
