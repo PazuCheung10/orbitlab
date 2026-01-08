@@ -7,6 +7,10 @@ This project focuses less on perfect physical accuracy, and more on
 making complex simulation rules visible, adjustable, and explorable
 in real time.
 
+## Repository
+
+- GitHub: [PazuCheung10/orbitlab](https://github.com/PazuCheung10/orbitlab)
+
 ## What This Project Is (and Isn't)
 
 This is not a scientifically exact gravity simulator.
@@ -143,7 +147,7 @@ You can adjust:
 Key configuration parameters are in `lib/gravity/config.ts`:
 
 ### Physics Parameters
-- `GRAVITY_CONSTANT`: Gravitational constant (default: 10000)
+- `GRAVITY_CONSTANT`: Gravitational constant (default is defined in code; presets and random universes may override it)
 - `VELOCITY_DAMPING`: Energy loss per frame (0 = no damping)
 - `SOFTENING_EPS_PX`: Gravity softening parameter to prevent singularities
 - `SUN_MASS`: Central sun mass for Orbit Playground mode
