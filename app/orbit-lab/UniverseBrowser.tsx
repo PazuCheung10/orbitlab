@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { GravityConfig, PhysicsMode } from '@/lib/gravity/config'
 import { generateProceduralUniverse, getPresetConfig, UNIVERSE_PRESETS, randomizeUniverse } from '@/lib/gravity/universe-presets'
+import { applyRandomMassBoost } from '@/lib/gravity/thumbnail-universe'
 import { GravitySimulation } from '@/lib/gravity/simulation'
 import styles from './UniverseBrowser.module.css'
 
@@ -69,11 +70,12 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
             const baseGravityConstant = (presetConfig.gravityConstant ?? currentConfig.gravityConstant)
             const baseMinMass = (presetConfig.minMass ?? currentConfig.minMass)
             const baseMaxMass = (presetConfig.maxMass ?? currentConfig.maxMass)
-            const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
-            const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85)
+            // Bump thumbnail masses up by 50% for better readability/feel.
+            const previewMinMass = Math.max(0.001, baseMinMass * 0.85 * 1.5)
+            const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85 * 1.5)
             const baseRadiusScale = (presetConfig.radiusScale ?? currentConfig.radiusScale)
-            const previewRadiusScale = baseRadiusScale * 0.55
-            const mergeStopMass = previewMaxMass * 1.4
+            const previewRadiusScale = baseRadiusScale * 0.7
+            const mergeStopMass = previewMaxMass * 3.0
 
             const config: GravityConfig = {
               ...currentConfig,
@@ -82,49 +84,45 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
               enableMerging: true,
               enableBoundaryWrapping: true,
               enableOrbitTrails: false,
-              // Decrease thumbnail gravity by 30% (0.8 -> 0.56).
-              gravityConstant: baseGravityConstant * 0.56,
-              potentialEnergyDegree: 1.7,
+              // Thumbnail tuning: reduce gravity by 30% (per request); we additionally scale by thumbnail size below.
+              // Decrease thumbnail gravity by 40% (3.0x -> 1.8x); we additionally scale by thumbnail size below.
+              gravityConstant: baseGravityConstant * 1.8,
               minMass: previewMinMass,
               maxMass: previewMaxMass,
               radiusScale: previewRadiusScale,
               mergeStopMass,
             }
 
-            // If the thumbnail is physically smaller, scale gravity down proportionally.
+            // Scale the "universe" down by thumbnail size. Keep dt constant; scale physics constants instead.
             const thumbMinDim = Math.min(cssW, cssH)
             const sizeScale = Math.max(0.1, Math.min(1.0, thumbMinDim / 600))
-            config.gravityConstant *= sizeScale
+            const degree = config.potentialEnergyDegree ?? currentConfig.potentialEnergyDegree
+            const gravityScale = Math.pow(sizeScale, degree + 1)
+            config.gravityConstant *= gravityScale
+            config.softeningEpsPx *= sizeScale
+            config.radiusScale *= sizeScale
 
             sim = new GravitySimulation(cssW, cssH, config)
             simulationRefs.current[index] = sim
 
             const seedKey = previewSeedRef.current[index] ?? `browser-preview-${index}-${preset.name}`
             sim.loadUniverse(
-              generateProceduralUniverse({
+              applyRandomMassBoost(generateProceduralUniverse({
                 width: cssW,
                 height: cssH,
                 config,
                 seed: seedKey,
                 // reduce another 30% (0.7x again)
                 // reduce 40% again (0.6x)
-                starCount: Math.round(55 * 1.3 * 0.7 * 0.7 * 0.6),
-              })
+                // reduce 30% again (0.7x)
+                starCount: Math.round(55 * 1.3 * 0.7 * 0.7 * 0.6 * 0.7),
+              }), { boostFactor: 4, minCount: 2, maxCount: 5, excludeHeaviest: true })
             )
 
-            // Scale initial velocities down for tiny preview "universes"
-            const minDim = Math.min(sim.width, sim.height)
-            const speedScale = Math.max(0.1, Math.min(1.0, minDim / 600))
-            if (speedScale !== 1.0) {
-              sim.stars.forEach((star) => {
-                star.vx *= speedScale
-                star.vy *= speedScale
-                star.vxHalf *= speedScale
-                star.vyHalf *= speedScale
-              })
-            }
+            // Velocities come from loadUniverse(); the constant ratio is achieved via scaled physics constants.
           }
 
+          // Keep dt constant; physics constants are scaled to thumbnail size.
           sim.update(1 / 60)
 
           // If everything merged into 1 star, reset with a fresh mini-universe
@@ -133,26 +131,16 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
             previewSeedRef.current[index] = seedKey
 
             sim.loadUniverse(
-              generateProceduralUniverse({
+              applyRandomMassBoost(generateProceduralUniverse({
                 width: sim.width,
                 height: sim.height,
                 config: sim.config,
                 seed: seedKey,
-                starCount: Math.round(30 * 0.7 * 0.7 * 0.6),
-              })
+                starCount: Math.round(30 * 0.7 * 0.7 * 0.6 * 0.7),
+              }), { boostFactor: 4, minCount: 2, maxCount: 5, excludeHeaviest: true })
             )
 
-            // Scale initial velocities down for tiny preview "universes"
-            const minDim = Math.min(sim.width, sim.height)
-            const speedScale = Math.max(0.1, Math.min(1.0, minDim / 600))
-            if (speedScale !== 1.0) {
-              sim.stars.forEach((star) => {
-                star.vx *= speedScale
-                star.vy *= speedScale
-                star.vxHalf *= speedScale
-                star.vyHalf *= speedScale
-              })
-            }
+            // Velocities come from loadUniverse(); the constant ratio is achieved via scaled physics constants.
           }
           
           const ctx = canvas.getContext('2d')
@@ -205,11 +193,12 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
       const baseGravityConstant = (presetConfig.gravityConstant ?? currentConfig.gravityConstant)
       const baseMinMass = (presetConfig.minMass ?? currentConfig.minMass)
       const baseMaxMass = (presetConfig.maxMass ?? currentConfig.maxMass)
-      const previewMinMass = Math.max(0.001, baseMinMass * 0.85)
-      const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85)
+      // Bump thumbnail masses up by 50% for better readability/feel.
+      const previewMinMass = Math.max(0.001, baseMinMass * 0.85 * 1.5)
+      const previewMaxMass = Math.max(previewMinMass + 0.001, (baseMaxMass * (2 / 3)) * 0.85 * 1.5)
       const baseRadiusScale = (presetConfig.radiusScale ?? currentConfig.radiusScale)
-      const previewRadiusScale = baseRadiusScale * 0.55
-      const mergeStopMass = previewMaxMass * 1.4
+      const previewRadiusScale = baseRadiusScale * 0.7
+      const mergeStopMass = previewMaxMass * 3.0
 
       const config: GravityConfig = {
         ...currentConfig,
@@ -217,28 +206,32 @@ export default function UniverseBrowser({ onLoadUniverse, onResetUniverse, curre
         enableMerging: true,
         enableBoundaryWrapping: true,
         enableOrbitTrails: false,
-        // Decrease thumbnail gravity by 30% (0.8 -> 0.56).
-        gravityConstant: baseGravityConstant * 0.56,
-        potentialEnergyDegree: 1.7,
+        // Thumbnail tuning: reduce gravity by 30% (per request); we additionally scale by thumbnail size below.
+        // Decrease thumbnail gravity by 40% (3.0x -> 1.8x); we additionally scale by thumbnail size below.
+        gravityConstant: baseGravityConstant * 1.8,
         minMass: previewMinMass,
         maxMass: previewMaxMass,
         radiusScale: previewRadiusScale,
         mergeStopMass,
       }
-      // Scale gravity down proportionally for tiny thumbnails.
-      const minDim = Math.min(sim.width, sim.height)
-      const sizeScale = Math.max(0.1, Math.min(1.0, minDim / 600))
-      config.gravityConstant *= sizeScale
+      // Scale the "universe" down by thumbnail size. Keep dt constant; scale physics constants instead.
+      const thumbMinDim = Math.min(sim.width, sim.height)
+      const sizeScale = Math.max(0.1, Math.min(1.0, thumbMinDim / 600))
+      const degree = config.potentialEnergyDegree ?? currentConfig.potentialEnergyDegree
+      const gravityScale = Math.pow(sizeScale, degree + 1)
+      config.gravityConstant *= gravityScale
+      config.softeningEpsPx *= sizeScale
+      config.radiusScale *= sizeScale
       sim.updateConfig(config)
       previewSeedRef.current[index] = `browser-preview-${index}-${preset.name}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
       sim.loadUniverse(
-        generateProceduralUniverse({
+        applyRandomMassBoost(generateProceduralUniverse({
           width: sim.width,
           height: sim.height,
           config,
           seed: previewSeedRef.current[index],
-          starCount: Math.round(55 * 1.3 * 0.7 * 0.7 * 0.6),
-        })
+          starCount: Math.round(55 * 1.3 * 0.7 * 0.7 * 0.6 * 0.7),
+        }), { boostFactor: 4, minCount: 2, maxCount: 5, excludeHeaviest: true })
       )
     }
   }
