@@ -52,8 +52,8 @@ export default function UniverseSelectionMenu({ onSelectUniverse, currentConfig 
       enableBoundaryWrapping: true,
 
       // Thumbnail tuning: reduce gravity by 30% (per request); we additionally scale by thumbnail size at runtime.
-      // Increase thumbnail gravity by 3.0x (2.5x * 1.2); we additionally scale by thumbnail size at runtime.
-      gravityConstant: baseGravityConstant * 3.0,
+      // Decrease thumbnail gravity by 40% (3.0x -> 1.8x); we additionally scale by thumbnail size at runtime.
+      gravityConstant: baseGravityConstant * 1.8,
       minMass: previewMinMass,
       maxMass: previewMaxMass,
       radiusScale: previewRadiusScale,
