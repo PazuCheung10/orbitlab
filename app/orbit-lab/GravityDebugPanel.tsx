@@ -30,6 +30,10 @@ export default function GravityDebugPanel({ config, onConfigChange, starCount, o
   }, [config])
 
   const updateConfig = (key: keyof GravityConfig, value: number | boolean) => {
+    // Clamp gravity constant to valid range
+    if (key === 'gravityConstant' && typeof value === 'number') {
+      value = Math.max(0, Math.min(30000, value))
+    }
     const newConfig = { ...localConfig, [key]: value }
     setLocalConfig(newConfig)
     onConfigChange(newConfig)
