@@ -144,8 +144,8 @@ export function randomizeUniverse(): Partial<GravityConfig> {
     satellitesAttractEachOther: Math.random() < 0.3, // 30% chance
     
     // Make each random universe meaningfully different
-    // Reduced by 30% then 40% per request (preserves the shape of the distribution)
-    gravityConstant: logUniform(840, 5040),
+    // Reduced by 30% then 40% then 50% per request (preserves the shape of the distribution)
+    gravityConstant: logUniform(420, 2520),
     softeningEpsPx: logUniform(1, 10),
     maxForceMagnitude: Math.random() < 0.5 ? 0 : logUniform(100, 10000),
     
@@ -174,7 +174,7 @@ export const UNIVERSE_PRESETS: UniversePreset[] = [
       physicsMode: PhysicsMode.ORBIT_PLAYGROUND,
       sunMass: 200,
       satellitesAttractEachOther: false,
-      gravityConstant: 2184,
+      gravityConstant: 1092,
       softeningEpsPx: 1.5,
       maxForceMagnitude: 0,
       orbitFactor: 1.0,
@@ -191,7 +191,7 @@ export const UNIVERSE_PRESETS: UniversePreset[] = [
       physicsMode: PhysicsMode.ORBIT_PLAYGROUND,
       sunMass: 250,
       satellitesAttractEachOther: false,
-      gravityConstant: 1806,
+      gravityConstant: 903,
       softeningEpsPx: 3,
       maxForceMagnitude: 0,
       orbitFactor: 0.85,
@@ -208,7 +208,7 @@ export const UNIVERSE_PRESETS: UniversePreset[] = [
       physicsMode: PhysicsMode.ORBIT_PLAYGROUND,
       sunMass: 300,
       satellitesAttractEachOther: false,
-      gravityConstant: 3444,
+      gravityConstant: 1722,
       softeningEpsPx: 1.5,
       maxForceMagnitude: 0,
       orbitFactor: 1.0,
@@ -225,7 +225,7 @@ export const UNIVERSE_PRESETS: UniversePreset[] = [
       physicsMode: PhysicsMode.ORBIT_PLAYGROUND,
       sunMass: 150,
       satellitesAttractEachOther: false,
-      gravityConstant: 1176,
+      gravityConstant: 588,
       softeningEpsPx: 1.5,
       maxForceMagnitude: 0,
       orbitFactor: 1.0,
@@ -242,7 +242,7 @@ export const UNIVERSE_PRESETS: UniversePreset[] = [
       physicsMode: PhysicsMode.N_BODY_CHAOS,
       sunMass: 200,
       satellitesAttractEachOther: true,
-      gravityConstant: 2730,
+      gravityConstant: 1365,
       softeningEpsPx: 3,
       maxForceMagnitude: 5000,
       orbitFactor: 1.0,
