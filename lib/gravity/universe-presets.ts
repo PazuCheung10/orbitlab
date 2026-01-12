@@ -138,14 +138,19 @@ export function randomizeUniverse(): Partial<GravityConfig> {
     return Math.pow(10, logMin + (logMax - logMin) * Math.random())
   }
   
+  // Round to nearest multiple of 100 (so gameplay * 0.5 is multiple of 50)
+  const roundTo100 = (value: number): number => {
+    return Math.round(value / 100) * 100
+  }
+  
   return {
     physicsMode: Math.random() < 0.5 ? PhysicsMode.ORBIT_PLAYGROUND : PhysicsMode.N_BODY_CHAOS,
     sunMass: 100 + Math.random() * 300, // 100-400
     satellitesAttractEachOther: Math.random() < 0.3, // 30% chance
     
     // Make each random universe meaningfully different
-    // Reduced by 30% then 40% then 50% then 20% then decreased by 100 then 150 per request (preserves the shape of the distribution)
-    gravityConstant: logUniform(100, 1750),
+    // Reduced by 50% (100-1750 -> 100-850) and rounded to nearest 100 (so gameplay is multiple of 50)
+    gravityConstant: roundTo100(logUniform(100, 850)),
     softeningEpsPx: logUniform(1, 10),
     maxForceMagnitude: Math.random() < 0.5 ? 0 : logUniform(100, 10000),
     
@@ -174,7 +179,7 @@ export const UNIVERSE_PRESETS: UniversePreset[] = [
       physicsMode: PhysicsMode.ORBIT_PLAYGROUND,
       sunMass: 200,
       satellitesAttractEachOther: false,
-      gravityConstant: 300,
+      gravityConstant: 200,
       softeningEpsPx: 1.5,
       maxForceMagnitude: 0,
       orbitFactor: 1.0,
@@ -191,7 +196,7 @@ export const UNIVERSE_PRESETS: UniversePreset[] = [
       physicsMode: PhysicsMode.ORBIT_PLAYGROUND,
       sunMass: 250,
       satellitesAttractEachOther: false,
-      gravityConstant: 500,
+      gravityConstant: 300,
       softeningEpsPx: 3,
       maxForceMagnitude: 0,
       orbitFactor: 0.85,
@@ -208,7 +213,7 @@ export const UNIVERSE_PRESETS: UniversePreset[] = [
       physicsMode: PhysicsMode.ORBIT_PLAYGROUND,
       sunMass: 300,
       satellitesAttractEachOther: false,
-      gravityConstant: 800,
+      gravityConstant: 400,
       softeningEpsPx: 1.5,
       maxForceMagnitude: 0,
       orbitFactor: 1.0,
@@ -225,7 +230,7 @@ export const UNIVERSE_PRESETS: UniversePreset[] = [
       physicsMode: PhysicsMode.ORBIT_PLAYGROUND,
       sunMass: 150,
       satellitesAttractEachOther: false,
-      gravityConstant: 50,
+      gravityConstant: 100,
       softeningEpsPx: 1.5,
       maxForceMagnitude: 0,
       orbitFactor: 1.0,
@@ -242,7 +247,7 @@ export const UNIVERSE_PRESETS: UniversePreset[] = [
       physicsMode: PhysicsMode.N_BODY_CHAOS,
       sunMass: 200,
       satellitesAttractEachOther: true,
-      gravityConstant: 600,
+      gravityConstant: 300,
       softeningEpsPx: 3,
       maxForceMagnitude: 5000,
       orbitFactor: 1.0,

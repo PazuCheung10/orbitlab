@@ -9,7 +9,7 @@ export const SATELLITES_ATTRACT_EACH_OTHER = false
 
 export const LAUNCH_STRENGTH = 0.9
 export const MASS_RESISTANCE_FACTOR = 0.3 // Bigger stars launch slower
-// Gameplay default (global): set to 100 per request.
+// Gameplay default (global): reduced by 50% to 50, but must be multiple of 100 for gameplay (50% multiplier) to result in multiple of 50.
 export const GRAVITY_CONSTANT = 100
 export const MAX_STAR_SIZE = 12 // Not used anymore
 export const RADIUS_SCALE = 1.2
